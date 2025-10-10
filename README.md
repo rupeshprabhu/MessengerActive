@@ -47,7 +47,7 @@ python messenger_active.py
 
 You can package the app into a single .exe (no console) using:
 
-pyinstaller --onefile --noconsole --icon=raphael_icon.ico --add-data "raphael_icon.ico;." messenger_active.py
+pyinstaller --onefile --noconsole --icon=raphael_icon.ico --add-data "ma_icon.ico;." messenger_active.py
 
 
 Your compiled file will appear in:
