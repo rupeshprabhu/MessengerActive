@@ -117,7 +117,7 @@ You’re free to use, modify, and distribute this project — just keep the lice
 Created with ❤️ by Rupesh Prabhu
 If you like this project, give it a ⭐ on GitHub — it helps others discover it!
 
-##🚀 Future Ideas
+## 🚀 Future Ideas
 -⏰ Custom idle interval configuration
 -🪟 Dark mode UI
 -📢 Toast notifications when minimizing to tray
