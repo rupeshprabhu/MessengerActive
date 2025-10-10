@@ -103,7 +103,7 @@ if getattr(sys, 'frozen', False):
 else:
     base_path = os.path.dirname(os.path.abspath(__file__))
 
-icon_path = os.path.join(base_path, 'raphael_icon.ico')
+icon_path = os.path.join(base_path, 'ma_icon.ico')
 
 # === Start background thread ===
 threading.Thread(target=keep_screen_awake, daemon=True).start()
@@ -161,4 +161,5 @@ root.protocol("WM_DELETE_WINDOW", on_minimize)
 root.bind("<Unmap>", lambda e: on_minimize() if root.state() == 'iconic' else None)
 
 # === Main loop ===
+
 root.mainloop()
