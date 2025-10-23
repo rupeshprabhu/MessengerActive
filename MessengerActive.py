@@ -15,7 +15,7 @@ from winotify import Notification
 APP_NAME = "MessengerActive"
 APP_VERSION = "1.0"
 
-# Logging setup
+# === Logging setup ===
 appdata_path = os.getenv('APPDATA')
 log_dir = os.path.join(appdata_path, APP_NAME)
 os.makedirs(log_dir, exist_ok=True)
@@ -26,12 +26,14 @@ running = True
 tray_icon = None
 has_shown_tray_message = False
 
+# === Resolve base path for icon (PyInstaller compatibility) ===
 if getattr(sys, 'frozen', False):
     base_path = sys._MEIPASS
 else:
     base_path = os.path.dirname(os.path.abspath(__file__))
 
 icon_path = os.path.join(base_path, "ma_icon.ico")
+
 ICON_IMG = None
 try:
     if os.path.exists(icon_path):
@@ -39,6 +41,7 @@ try:
 except Exception as e:
     logging.error(f"Failed to load icon image: {e}")
 
+# === Set AppUserModelID for taskbar icon and notifications (Windows) ===
 if os.name == 'nt':
     try:
         app_id = f"{APP_NAME}.{APP_VERSION}"
@@ -53,6 +56,7 @@ def simulate_keypress():
 def keep_screen_awake():
     last_keypress = time.time()
     while running:
+        # Prevent system sleep and display off
         ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000002)
         if time.time() - last_keypress >= 300:
             simulate_keypress()
@@ -61,11 +65,13 @@ def keep_screen_awake():
 
 def show_notification(title, msg, duration=5):
     try:
-        toast = Notification(app_id=APP_NAME,
-                             title=title,
-                             msg=msg,
-                             icon=icon_path if os.path.exists(icon_path) else None,
-                             duration="short" if duration < 10 else "long")
+        toast = Notification(
+            app_id=APP_NAME,
+            title=title,
+            msg=msg,
+            icon=icon_path if os.path.exists(icon_path) else None,
+            duration="short" if duration < 10 else "long"
+        )
         toast.show()
     except Exception as e:
         logging.error(f"Notification failed: {e}")
@@ -132,7 +138,7 @@ def on_exit():
     show_notification(APP_NAME, "MessengerActive has been closed.")
     root.destroy()
 
-# Tkinter setup
+# === Tkinter Setup ===
 root = tk.Tk()
 root.title(APP_NAME)
 root.geometry("250x100")
@@ -143,19 +149,20 @@ try:
 except Exception as e:
     logging.error(f"Icon set failed: {e}")
 
-# Center window
+# Center window on screen
 x = (root.winfo_screenwidth() - 250) // 2
 y = (root.winfo_screenheight() - 100) // 2
 root.geometry(f"250x100+{x}+{y}")
 
-# UI
+# UI Elements
 ttk.Label(root, text="Teams is Active", font=("Segoe UI", 11)).pack(pady=10)
 ttk.Button(root, text="Exit", command=on_exit_confirm).pack()
 
-# Bind events
+# Bind minimize and close events
 root.protocol("WM_DELETE_WINDOW", on_exit_confirm)
 root.bind("<Unmap>", lambda e: on_minimize() if root.state() == 'iconic' else None)
 
+# Start the keep-awake thread
 threading.Thread(target=keep_screen_awake, daemon=True).start()
 
 root.mainloop()
