@@ -1,0 +1,46 @@
+# Byte-compiled / caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual envs
+venv/
+.env/
+.env.* 
+.venv/
+
+# Editor / OS files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+Thumbs.db
+.DS_Store
+
+# Build / packaging artifacts
+build/
+dist/
+_output/          # if you used a different folder name
+Output/           # Inno Setup output
+*.spec
+*.log
+*.tmp
+*.bak
+
+# PyInstaller extracted files (safety)
+*.manifest
+*.dll
+
+# Installer and release artifacts (you may want to exclude from git; keep local only)
+MessengerActive_Setup.exe
+*.msi
+*.zip
+
+# Node / other
+node_modules/
+
+# secrets
+*.pem
+*.pfx
+*.p12
+credentials.json

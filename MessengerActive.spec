@@ -1,16 +1,18 @@
-# -*- mode: python ; coding: utf-8 -*-
-
+# messenger_active.spec
 block_cipher = None
 
 a = Analysis(
     ['MessengerActive.py'],
     pathex=[],
     binaries=[],
-    datas=[('ma_icon.ico', '.')],  # bundle icon in root of temp folder
-    hiddenimports=[],
+    datas=[('ma_icon.ico', '.')],
+    hiddenimports=['win32timezone', 'pystray._win32', 'winotify'],
     hookspath=[],
     runtime_hooks=[],
     excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
@@ -18,14 +20,15 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
     [],
-    exclude_binaries=True,
     name='MessengerActive',
     debug=False,
-    bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,
+    console=False,  # no console
     icon='ma_icon.ico',
 )
 
@@ -36,5 +39,6 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=True,
-    name='MessengerActive',
+    upx_exclude=[],
+    name='MessengerActive'
 )
