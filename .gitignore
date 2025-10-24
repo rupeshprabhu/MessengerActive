@@ -26,6 +26,7 @@ Output/           # Inno Setup output
 *.log
 *.tmp
 *.bak
+*.iss
 
 # PyInstaller extracted files (safety)
 *.manifest
