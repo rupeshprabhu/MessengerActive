@@ -21,7 +21,8 @@ It simulates small background activity, ensuring your PC stays active — withou
 - 🪟 Modern Tkinter GUI  
 - 🪶 Custom app & taskbar icon  
 - 🧩 Optional System Tray (minimize-to-tray support)  
-- 🧠 Lightweight — uses minimal CPU and memory  
+- 🧠 Lightweight — uses minimal CPU and memory
+- 📢 Toast notifications when minimizing to tray
 
 ---
 
@@ -122,4 +123,3 @@ If you like this project, give it a ⭐ on GitHub — it helps others discover i
 ## 🚀 Future Ideas
 -⏰ Custom idle interval configuration
 -🪟 Dark mode UI
--📢 Toast notifications when minimizing to tray
