@@ -13,7 +13,11 @@ import win32con
 from winotify import Notification
 
 APP_NAME = "MessengerActive"
-APP_VERSION = "1.0"
+# APP_VERSION = "1.0"
+
+with open(os.path.join(os.path.dirname(__file__), "version.txt"), "r") as vf:
+    APP_VERSION = vf.read().strip()
+
 
 # === Logging setup ===
 appdata_path = os.getenv("APPDATA")
