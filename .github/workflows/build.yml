@@ -11,12 +11,16 @@ on:
 permissions:
   contents: write
 
+env:
+  BUILD_DIR: dist/MessengerActive
+  INSTALLER_NAME: MessengerActive_Setup.exe
+
 jobs:
   build:
     name: Test & Build Windows App
     runs-on: windows-latest
     outputs:
-      version: ${{ steps.set_version.outputs.version }}
+      version: ${{ steps.version.outputs.version }}
 
     steps:
       - name: Checkout repository
@@ -40,7 +44,7 @@ jobs:
         run: pytest -v tests/test_single_instance.py
 
       - name: Bump version
-        id: set_version
+        id: version
         shell: pwsh
         run: |
           $version = Get-Content version.txt
@@ -48,7 +52,7 @@ jobs:
           $parts[-1] = [int]$parts[-1] + 1
           $newVersion = "$($parts -join '.')"
           Set-Content version.txt $newVersion
-          Write-Host "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
+          echo "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
           Write-Host "Bumped version to $newVersion"
 
       - name: Commit version bump
@@ -58,7 +62,7 @@ jobs:
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
           git add version.txt
-          git commit -m "Bump version to ${{ steps.set_version.outputs.version }}" || echo "No changes to commit"
+          git commit -m "Bump version to ${{ steps.version.outputs.version }}" || echo "No changes to commit"
           git push origin HEAD:main
 
       - name: Build executable
@@ -69,11 +73,19 @@ jobs:
           echo "Building installer..."
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
 
-      - name: Upload artifact
+      - name: Archive source code
+        run: |
+          git archive -o source_code.zip HEAD
+          git archive --format=tar.gz -o source_code.tar.gz HEAD
+
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: messengeractive-artifact
-          path: dist/MessengerActive
+          name: messengeractive-artifacts
+          path: |
+            ${{ env.BUILD_DIR }}/MessengerActive_Setup.exe
+            source_code.zip
+            source_code.tar.gz
 
   prerelease:
     name: Create Pre-Release
@@ -85,31 +97,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set build version from previous job
-        run: echo "BUILD_VERSION=${{ needs.build.outputs.version }}" >> $GITHUB_ENV
-
-      - name: Download build artifact
+      - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: messengeractive-artifact
+          name: messengeractive-artifacts
           path: release
 
       - name: Verify downloaded files
         shell: pwsh
         run: |
           Write-Host "Downloaded files:"
-          Get-ChildItem release
-          if (-Not (Get-ChildItem release)) {
-            Write-Error "Error: No files found in release/ folder!"
+          Get-ChildItem release | ForEach-Object { Write-Host $_.FullName }
+          if (-not (Test-Path "release/MessengerActive_Setup.exe")) {
+            Write-Error "Installer not found!"
+            exit 1
+          }
+          if (-not (Test-Path "release/source_code.zip")) {
+            Write-Error "Source zip not found!"
+            exit 1
+          }
+          if (-not (Test-Path "release/source_code.tar.gz")) {
+            Write-Error "Source tar.gz not found!"
             exit 1
           }
 
       - name: Create Pre-release on GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ env.BUILD_VERSION }}"
-          name: "MessengerActive v${{ env.BUILD_VERSION }}"
+          tag_name: "v${{ needs.build.outputs.version }}"
+          name: "MessengerActive v${{ needs.build.outputs.version }}"
           prerelease: true
-          files: "release/**"
+          files: |
+            release/MessengerActive_Setup.exe
+            release/source_code.zip
+            release/source_code.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
