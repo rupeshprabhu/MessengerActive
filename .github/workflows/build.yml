@@ -21,8 +21,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -77,7 +75,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "MessengerActive-${{ steps.version.outputs.version }}"
+          name: MessengerActive-${{ steps.version.outputs.version }}
           path: dist/MessengerActive
 
   prerelease:
@@ -96,20 +94,18 @@ jobs:
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          name: "MessengerActive-${{ needs.build.outputs.version }}"
+          name: MessengerActive-${{ needs.build.outputs.version }}
           path: dist/MessengerActive
 
       - name: Display downloaded files
-        run: |
-          echo "Downloaded artifact contents:"
-          dir dist/MessengerActive
+        run: dir dist/MessengerActive
 
       - name: Create Pre-release on GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ needs.build.outputs.version }}"
-          name: "MessengerActive v${{ needs.build.outputs.version }}"
+          tag_name: v${{ needs.build.outputs.version }}
+          name: MessengerActive v${{ needs.build.outputs.version }}
           prerelease: true
-          files: "dist/MessengerActive/**"
+          files: dist/MessengerActive/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
