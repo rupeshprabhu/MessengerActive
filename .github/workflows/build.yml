@@ -53,6 +53,9 @@ jobs:
           echo "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
           Write-Host "Bumped version to $newVersion"
 
+      - name: Debug version output
+        run: echo "Version output is ${{ steps.version.outputs.version }}"
+
       - name: Commit version bump
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -90,23 +93,23 @@ jobs:
       - name: Set BUILD_VERSION environment
         run: echo "BUILD_VERSION=${{ needs.build.outputs.version }}" >> $GITHUB_ENV
 
-      - name: Debug build job output
+      - name: Debug build job version
         shell: bash
         run: echo "Build job version is $BUILD_VERSION"
-
-      - name: Check if artifact exists
-        shell: bash
-        run: |
-          if [ ! -d "dist/MessengerActive" ]; then
-            echo "Artifact not found! Exiting."
-            exit 1
-          fi
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: "MessengerActive-${{ needs.build.outputs.version }}"
           path: dist/MessengerActive
+
+      - name: Check if artifact exists after download
+        shell: bash
+        run: |
+          if [ ! -d "dist/MessengerActive" ]; then
+            echo "Artifact not found after download! Exiting."
+            exit 1
+          fi
 
       - name: Display downloaded files
         shell: bash
