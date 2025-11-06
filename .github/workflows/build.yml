@@ -53,6 +53,7 @@ jobs:
           $parts[-1] = [int]$parts[-1] + 1
           $newVersion = "$($parts -join '.')"
           Set-Content version.txt $newVersion
+          # write to GITHUB_OUTPUT so job outputs can read it
           echo "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
           Write-Host "✅ Bumped version to $newVersion"
 
@@ -80,7 +81,15 @@ jobs:
           Write-Host "Running Inno Setup compiler..."
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
 
-          $installerPath = "D:\a\MessengerActive\MessengerActive\Output\MessengerActive_Setup.exe"
+          $workspace = $env:GITHUB_WORKSPACE
+          $installerPath = Join-Path $workspace "${{ env.INSTALLER_DIR }}\MessengerActive_Setup.exe"
+
+          if (-not (Test-Path $installerPath)) {
+            # try to find generated exe in Output folder if name differs
+            $found = Get-ChildItem -Path (Join-Path $workspace ${{ env.INSTALLER_DIR }}) -Filter "MessengerActive_Setup*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) { $installerPath = $found.FullName }
+          }
+
           if (-not (Test-Path $installerPath)) {
             Write-Error "Installer not found after Inno Setup! Expected at $installerPath"
             exit 1
@@ -88,18 +97,29 @@ jobs:
 
           $version = "${{ steps.version.outputs.version }}"
           $newInstallerName = "${{ env.INSTALLER_BASE_NAME }}_$version.exe"
-          Rename-Item -Path $installerPath -NewName $newInstallerName
-          Write-Host "✅ Renamed installer to: Output\$newInstallerName"
+          $newInstallerPath = Join-Path (Join-Path $workspace ${{ env.INSTALLER_DIR }}) $newInstallerName
 
-      - name: 🔏 Self-sign the installer
+          Rename-Item -Path $installerPath -NewName $newInstallerName -Force
+          Write-Host "✅ Renamed installer to: $newInstallerPath"
+
+      - name: 🔏 Self-sign the installer (temporary .pfx, explicit /f usage)
         shell: pwsh
         run: |
-          Write-Host "🔏 Creating temporary code signing certificate..."
-          $certPath = "$env:RUNNER_TEMP\temp_signing_cert.pfx"
-          $password = "password123"
+          Write-Host "🔏 Creating temporary code signing certificate (.pfx) and signing installer..."
+          $workspace = $env:GITHUB_WORKSPACE
+          $installerDir = Join-Path $workspace "${{ env.INSTALLER_DIR }}"
+          $installer = Get-ChildItem -Path $installerDir -Filter "${{ env.INSTALLER_BASE_NAME }}_*.exe" | Select-Object -First 1
+
+          if (-not $installer) {
+            Write-Error "Installer not found for signing in $installerDir"
+            exit 1
+          }
+
+          $certPath = Join-Path $env:RUNNER_TEMP "temp_signing_cert.pfx"
+          $password = "password123"   # temporary; only for CI self-signing
           $publisher = "Rupesh Prabhu (MessengerActive)"
 
-          # Create a temporary self-signed certificate
+          # Create a self-signed cert in CurrentUser store (exportable)
           $cert = New-SelfSignedCertificate `
               -Subject "CN=$publisher" `
               -DnsName "MessengerActive.local" `
@@ -110,43 +130,50 @@ jobs:
               -KeyAlgorithm RSA `
               -HashAlgorithm SHA256
 
-          # Export cert to .pfx
-          Export-PfxCertificate `
-              -Cert $cert `
-              -FilePath $certPath `
-              -Password (ConvertTo-SecureString -String $password -Force -AsPlainText)
+          # Export PFX
+          Export-PfxCertificate -Cert $cert -FilePath $certPath -Password (ConvertTo-SecureString -String $password -Force -AsPlainText)
 
-          # Import cert to store so signtool can find it
-          Import-PfxCertificate `
-              -FilePath $certPath `
-              -CertStoreLocation "Cert:\CurrentUser\My" `
-              -Password (ConvertTo-SecureString -String $password -Force -AsPlainText) | Out-Null
+          Write-Host "✅ Exported temporary PFX to $certPath"
 
-          # Locate signtool dynamically
+          # Find signtool dynamically (x64 preferred)
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -ErrorAction SilentlyContinue |
               Where-Object { $_.Name -eq "signtool.exe" -and $_.FullName -match "x64" } |
               Select-Object -First 1
 
           if (-not $signtool) {
-              Write-Error "❌ signtool.exe not found on this runner!"
-              exit 1
+            # fallback to any signtool
+            $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -eq "signtool.exe" } | Select-Object -First 1
+          }
+
+          if (-not $signtool) {
+            Write-Error "❌ signtool.exe not found on this runner!"
+            exit 1
           }
 
           Write-Host "✅ Found signtool at $($signtool.FullName)"
+          $installerPath = $installer.FullName
+          Write-Host "🔏 Signing $installerPath ..."
 
-          $installer = Get-ChildItem "D:\a\MessengerActive\MessengerActive\Output" -Filter "MessengerActive_Setup_*.exe" | Select-Object -First 1
-          if (-not $installer) {
-              Write-Error "❌ Installer file not found for signing!"
-              exit 1
-          }
+          # Use /f (pfx file) and /p (password) explicitly to avoid store lookup issues
+          & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+              /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
 
-          Write-Host "🔏 Signing $($installer.FullName)..."
-          & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installer.FullName
           if ($LASTEXITCODE -ne 0) {
-              Write-Error "❌ signtool failed to sign the installer!"
-              exit 1
+            Write-Error "❌ signtool failed to sign the installer (exit code $LASTEXITCODE)!"
+            exit 1
           }
-          Write-Host "✅ Successfully self-signed installer with publisher: $publisher"
+
+          Write-Host "✅ Signed. Now verifying signature..."
+
+          # Verify signature using signtool verify (fail if not valid)
+          & $signtool.FullName verify /pa /v $installerPath
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "❌ Signature verification failed (exit code $LASTEXITCODE)!"
+            exit 1
+          }
+
+          Write-Host "✅ Signature verified."
 
       - name: 📚 Archive source code
         run: |
@@ -186,6 +213,14 @@ jobs:
 
           if (-not (Get-ChildItem "release/Output" -Filter "MessengerActive_Setup_*.exe")) {
             Write-Error "❌ Installer not found in release/Output/"
+            exit 1
+          }
+          if (-not (Test-Path "release/source_code.zip")) {
+            Write-Error "❌ Source zip not found!"
+            exit 1
+          }
+          if (-not (Test-Path "release/source_code.tar.gz")) {
+            Write-Error "❌ Source tar.gz not found!"
             exit 1
           }
 
