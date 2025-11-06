@@ -8,10 +8,6 @@ on:
   release:
     types: [prereleased, released]
 
-# 👇 Grant write permission to push commits
-permissions:
-  contents: write
-
 jobs:
   build:
     name: Test & Build Windows App
@@ -21,7 +17,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -43,7 +39,6 @@ jobs:
 
       - name: Bump version
         id: version
-        shell: pwsh
         run: |
           $version = Get-Content version.txt
           $parts = $version.Split('.')
@@ -56,27 +51,21 @@ jobs:
       - name: Commit version bump
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: pwsh
         run: |
           git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
+          git config --global user.email "actions@github.com"
           git add version.txt
-          git commit -m "Bump version to ${{ steps.version.outputs.version }}" || echo "No version change to commit"
-          git push origin main
+          git commit -m "Bump version to ${{ steps.version.outputs.version }}" || echo "No changes to commit"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
 
       - name: Build executable
-        working-directory: ${{ github.workspace }}
         run: |
-          echo "Current working directory:"
-          echo %cd%
-          echo "Listing files..."
-          dir
           pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico MessengerActive.py
 
       - name: Create setup (Inno Setup)
         run: |
           echo "Building installer..."
-          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" MessengerActive.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

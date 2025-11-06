@@ -3,7 +3,7 @@
 ; =============================
 #define MyAppName "MessengerActive"
 #define MyAppVersion "1.0"
-#define MyAppPublisher "Your Name or Company"
+#define MyAppPublisher "Absolute Gizmos by Rupesh Prabhu"
 #define MyAppExeName "MessengerActive.exe"
 
 [Setup]
