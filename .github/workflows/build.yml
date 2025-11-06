@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # Run when a tag is created (optional for manual release)
   release:
     types: [prereleased, released]
 
@@ -29,8 +30,7 @@ jobs:
           pip install pyinstaller pytest psutil
 
       - name: Run tests
-        env:
-          PYTHONPATH: ${{ github.workspace }}
+        working-directory: ${{ github.workspace }}
         run: pytest -v
 
       - name: Run single-instance test
@@ -38,7 +38,6 @@ jobs:
 
       - name: Bump version
         id: version
-        shell: pwsh
         run: |
           $version = Get-Content version.txt
           $parts = $version.Split('.')
