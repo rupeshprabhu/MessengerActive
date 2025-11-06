@@ -88,9 +88,8 @@ jobs:
 
           $version = "${{ steps.version.outputs.version }}"
           $newInstallerName = "${{ env.INSTALLER_BASE_NAME }}_$version.exe"
-          $newInstallerPath = Join-Path $env:INSTALLER_DIR $newInstallerName
           Rename-Item -Path $installerPath -NewName $newInstallerName
-          Write-Host "Renamed installer to: $newInstallerPath"
+          Write-Host "Renamed installer to: Output\$newInstallerName"
 
       - name: Archive source code
         run: |
@@ -126,10 +125,10 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Downloaded files:"
-          Get-ChildItem release | ForEach-Object { Write-Host $_.FullName }
+          Get-ChildItem -Recurse release | ForEach-Object { Write-Host $_.FullName }
 
-          if (-not (Test-Path "release/MessengerActive_Setup_*.exe")) {
-            Write-Error "Installer not found!"
+          if (-not (Test-Path "release/Output/MessengerActive_Setup_*.exe")) {
+            Write-Error "Installer not found in release/Output/"
             exit 1
           }
           if (-not (Test-Path "release/source_code.zip")) {
@@ -148,7 +147,7 @@ jobs:
           name: "MessengerActive v${{ needs.build.outputs.version }}"
           prerelease: true
           files: |
-            release/MessengerActive_Setup_*.exe
+            release/Output/MessengerActive_Setup_*.exe
             release/source_code.zip
             release/source_code.tar.gz
         env:
