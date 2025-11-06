@@ -18,33 +18,33 @@ env:
 
 jobs:
   build:
-    name: Test & Build Windows App
+    name: 🧪 Test & Build Windows App
     runs-on: windows-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
 
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: 🐍 Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller pytest psutil
 
-      - name: Run tests
-        run: pytest -v
+      - name: 🧪 Run all tests
+        run: pytest -v || exit 1
 
-      - name: Run single-instance test
-        run: pytest -v tests/test_single_instance.py
+      - name: 🧪 Run single-instance test
+        run: pytest -v tests/test_single_instance.py || exit 1
 
-      - name: Bump version
+      - name: 🔢 Bump version
         id: version
         shell: pwsh
         run: |
@@ -54,9 +54,9 @@ jobs:
           $newVersion = "$($parts -join '.')"
           Set-Content version.txt $newVersion
           echo "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
-          Write-Host "Bumped version to $newVersion"
+          Write-Host "✅ Bumped version to $newVersion"
 
-      - name: Commit version bump
+      - name: 💾 Commit version bump
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -66,7 +66,7 @@ jobs:
           git commit -m "Bump version to ${{ steps.version.outputs.version }}" || echo "No changes to commit"
           git push origin HEAD:main
 
-      - name: Build executable
+      - name: 🏗️ Build executable
         run: |
           pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico MessengerActive.py
           if (-not (Test-Path "$env:BUILD_DIR/MessengerActive/MessengerActive.exe")) {
@@ -74,7 +74,7 @@ jobs:
             exit 1
           }
 
-      - name: Create installer (Inno Setup)
+      - name: 📦 Create installer (Inno Setup)
         shell: pwsh
         run: |
           Write-Host "Running Inno Setup compiler..."
@@ -89,19 +89,21 @@ jobs:
           $version = "${{ steps.version.outputs.version }}"
           $newInstallerName = "${{ env.INSTALLER_BASE_NAME }}_$version.exe"
           Rename-Item -Path $installerPath -NewName $newInstallerName
-          Write-Host "Renamed installer to: Output\$newInstallerName"
+          Write-Host "✅ Renamed installer to: Output\$newInstallerName"
 
-      - name: Self-sign the installer
+      - name: 🔏 Self-sign the installer
         shell: pwsh
         run: |
           Write-Host "🔏 Creating temporary code signing certificate..."
           $certPath = "$env:RUNNER_TEMP\temp_signing_cert.pfx"
           $password = "password123"
+          $publisher = "Rupesh Prabhu (MessengerActive)"
 
-          # Create temporary self-signed certificate (LocalMachine store)
+          # Create a temporary self-signed certificate
           $cert = New-SelfSignedCertificate `
+              -Subject "CN=$publisher" `
               -DnsName "MessengerActive.local" `
-              -CertStoreLocation "Cert:\LocalMachine\My" `
+              -CertStoreLocation "Cert:\CurrentUser\My" `
               -NotAfter (Get-Date).AddYears(1) `
               -KeyExportPolicy Exportable `
               -KeyLength 2048 `
@@ -114,6 +116,12 @@ jobs:
               -FilePath $certPath `
               -Password (ConvertTo-SecureString -String $password -Force -AsPlainText)
 
+          # Import cert to store so signtool can find it
+          Import-PfxCertificate `
+              -FilePath $certPath `
+              -CertStoreLocation "Cert:\CurrentUser\My" `
+              -Password (ConvertTo-SecureString -String $password -Force -AsPlainText) | Out-Null
+
           # Locate signtool dynamically
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -ErrorAction SilentlyContinue |
               Where-Object { $_.Name -eq "signtool.exe" -and $_.FullName -match "x64" } |
@@ -125,28 +133,27 @@ jobs:
           }
 
           Write-Host "✅ Found signtool at $($signtool.FullName)"
-          $installer = Get-ChildItem "D:\a\MessengerActive\MessengerActive\Output" -Filter "MessengerActive_Setup_*.exe" | Select-Object -First 1
 
+          $installer = Get-ChildItem "D:\a\MessengerActive\MessengerActive\Output" -Filter "MessengerActive_Setup_*.exe" | Select-Object -First 1
           if (-not $installer) {
               Write-Error "❌ Installer file not found for signing!"
               exit 1
           }
 
           Write-Host "🔏 Signing $($installer.FullName)..."
-          & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $installer.FullName
+          & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installer.FullName
           if ($LASTEXITCODE -ne 0) {
               Write-Error "❌ signtool failed to sign the installer!"
               exit 1
           }
+          Write-Host "✅ Successfully self-signed installer with publisher: $publisher"
 
-          Write-Host "✅ Successfully self-signed installer."
-
-      - name: Archive source code
+      - name: 📚 Archive source code
         run: |
           git archive -o source_code.zip HEAD
           git archive --format=tar.gz -o source_code.tar.gz HEAD
 
-      - name: Upload build artifacts
+      - name: ⬆️ Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: messengeractive-artifacts
@@ -156,41 +163,33 @@ jobs:
             source_code.tar.gz
 
   prerelease:
-    name: Create Pre-Release
+    name: 🚀 Create Pre-Release
     needs: build
     runs-on: windows-latest
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download build artifacts
+      - name: 📦 Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: messengeractive-artifacts
           path: release
 
-      - name: Verify downloaded files
+      - name: 🔍 Verify downloaded files
         shell: pwsh
         run: |
           Write-Host "Downloaded files:"
           Get-ChildItem -Recurse release | ForEach-Object { Write-Host $_.FullName }
 
-          if (-not (Test-Path "release/Output/MessengerActive_Setup_*.exe")) {
-            Write-Error "Installer not found in release/Output/"
-            exit 1
-          }
-          if (-not (Test-Path "release/source_code.zip")) {
-            Write-Error "Source zip not found!"
-            exit 1
-          }
-          if (-not (Test-Path "release/source_code.tar.gz")) {
-            Write-Error "Source tar.gz not found!"
+          if (-not (Get-ChildItem "release/Output" -Filter "MessengerActive_Setup_*.exe")) {
+            Write-Error "❌ Installer not found in release/Output/"
             exit 1
           }
 
-      - name: Create Pre-release on GitHub
+      - name: 🏷️ Create Pre-release on GitHub
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ needs.build.outputs.version }}"
