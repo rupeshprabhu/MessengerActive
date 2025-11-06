@@ -8,14 +8,13 @@ on:
   release:
     types: [prereleased, released]
 
-# ✅ Give write permissions globally so version bump can push
-permissions:
-  contents: write
-
 jobs:
   build:
     name: Test & Build Windows App
     runs-on: windows-latest
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}  # ✅ Expose version for next job
 
     steps:
       - name: Checkout repository
@@ -77,6 +76,7 @@ jobs:
         with:
           name: MessengerActive-${{ steps.version.outputs.version }}
           path: dist/MessengerActive
+
 
   prerelease:
     name: Create Pre-Release
