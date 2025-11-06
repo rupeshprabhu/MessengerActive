@@ -89,15 +89,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Debug build job output
-        run: echo "Build job version is: ${{ needs.build.outputs.version }}"
+#        run: echo "Build job version is: ${{ needs.build.outputs.version }}"
 
-      - name: Attempt to download build artifact
-        id: download_artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: MessengerActive-${{ needs.build.outputs.version }}
-          path: dist/MessengerActive
-        continue-on-error: true
+#      - name: Attempt to download build artifact
+#        id: download_artifact
+#        uses: actions/download-artifact@v4
+#        with:
+#          name: MessengerActive-${{ needs.build.outputs.version }}
+#          path: dist/MessengerActive
+#        continue-on-error: true
 
       - name: Check if artifact was downloaded
         run: |
