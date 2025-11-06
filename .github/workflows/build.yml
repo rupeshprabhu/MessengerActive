@@ -8,6 +8,10 @@ on:
   release:
     types: [prereleased, released]
 
+# ✅ Give write permissions globally so version bump can push
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Test & Build Windows App
@@ -39,8 +43,6 @@ jobs:
 
       - name: Bump version
         id: version
-        permissions:
-          contents: write
         run: |
           $version = Get-Content version.txt
           $parts = $version.Split('.')
@@ -65,6 +67,7 @@ jobs:
           pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico MessengerActive.py
 
       - name: Create setup (Inno Setup)
+        shell: pwsh
         run: |
           echo "Building installer..."
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
