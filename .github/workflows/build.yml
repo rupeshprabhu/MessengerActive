@@ -21,8 +21,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -51,10 +49,6 @@ jobs:
           $newVersion = "$($parts -join '.')"
           Set-Content version.txt $newVersion
           echo "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
-          Write-Host "Bumped version to $newVersion"
-
-      - name: Debug version output
-        run: echo "Version output is ${{ steps.version.outputs.version }}"
 
       - name: Commit version bump
         env:
@@ -71,14 +65,15 @@ jobs:
 
       - name: Create setup (Inno Setup)
         run: |
-          echo "Building installer..."
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "MessengerActive-${{ steps.version.outputs.version }}"
-          path: dist/MessengerActive
+          name: MessengerActive-${{ steps.version.outputs.version }}
+          path: |
+            dist/MessengerActive/**
+            dist/MessengerActive.exe
 
   prerelease:
     name: Create Pre-Release
@@ -90,39 +85,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set BUILD_VERSION environment
-        run: echo "BUILD_VERSION=${{ needs.build.outputs.version }}" >> $GITHUB_ENV
-
-      - name: Debug build job version
-        shell: bash
-        run: echo "Build job version is $BUILD_VERSION"
-
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          name: "MessengerActive-${{ needs.build.outputs.version }}"
-          path: dist/MessengerActive
+          name: MessengerActive-${{ needs.build.outputs.version }}
+          path: release/
 
-      - name: Check if artifact exists after download
-        shell: bash
+      - name: Verify downloaded files
         run: |
-          if [ ! -d "dist/MessengerActive" ]; then
-            echo "Artifact not found after download! Exiting."
+          echo "Downloaded files:"
+          dir release
+          if [ -z "$(ls -A release)" ]; then
+            echo "Error: No files found in release/ folder!"
             exit 1
           fi
-
-      - name: Display downloaded files
-        shell: bash
-        run: |
-          echo "Downloaded artifact contents:"
-          ls dist/MessengerActive
 
       - name: Create Pre-release on GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ needs.build.outputs.version }}"
-          name: "MessengerActive v${{ needs.build.outputs.version }}"
+          tag_name: v${{ needs.build.outputs.version }}
+          name: MessengerActive v${{ needs.build.outputs.version }}
           prerelease: true
-          files: "dist/MessengerActive/**"
+          files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
