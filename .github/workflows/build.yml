@@ -15,12 +15,14 @@ jobs:
   build:
     name: Test & Build Windows App
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}   # 👈 Expose version to other jobs
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          persist-credentials: true  # ✅ Keep token available for push
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,7 +36,6 @@ jobs:
           pip install pyinstaller pytest psutil
 
       - name: Run tests
-        working-directory: ${{ github.workspace }}
         run: pytest -v
 
       - name: Run single-instance test
@@ -42,6 +43,7 @@ jobs:
 
       - name: Bump version
         id: version
+        shell: pwsh
         run: |
           $version = Get-Content version.txt
           $parts = $version.Split('.')
@@ -51,6 +53,9 @@ jobs:
           echo "version=$newVersion" >> $env:GITHUB_OUTPUT
           echo "Bumped version to $newVersion"
 
+      - name: Debug version output
+        run: echo "Version output is ${{ steps.version.outputs.version }}"
+
       - name: Commit version bump
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -59,7 +64,7 @@ jobs:
           git config --global user.email "actions@github.com"
           git add version.txt
           git commit -m "Bump version to ${{ steps.version.outputs.version }}" || echo "No changes to commit"
-          git push origin HEAD:main  # ✅ Fixed: simpler and works with GITHUB_TOKEN
+          git push origin HEAD:main
 
       - name: Build executable
         run: |
@@ -76,6 +81,7 @@ jobs:
           name: MessengerActive-${{ steps.version.outputs.version }}
           path: dist/MessengerActive
 
+
   prerelease:
     name: Create Pre-Release
     needs: build
@@ -88,13 +94,16 @@ jobs:
         with:
           persist-credentials: true
 
+      - name: Debug build job output
+        run: echo "Build job version is: ${{ needs.build.outputs.version }}"
+
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: MessengerActive-${{ needs.build.outputs.version }}
           path: dist/MessengerActive
 
-      - name: Display downloaded files (debug)
+      - name: Display downloaded files
         run: |
           echo "Downloaded artifact contents:"
           dir dist/MessengerActive
