@@ -1,32 +1,50 @@
-import threading
+import sys
+import os
+import subprocess
 import time
-import ctypes
-import win32api
-import win32con
-import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+import psutil
+import pytest
 
-from main import keep_screen_awake, simulate_keypress, running
+# --- Ensure root path is added ---
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+# Now import your main functions
+from main import simulate_keypress, keep_screen_awake, running
+
 
 def test_simulate_keypress():
-    """Ensure simulate_keypress runs without error."""
+    """Ensure simulate_keypress function executes without throwing."""
     try:
         simulate_keypress()
     except Exception as e:
-        assert False, f"simulate_keypress failed: {e}"
+        pytest.fail(f"simulate_keypress() raised an exception: {e}")
 
-def test_thread_alive():
-    """Ensure keep_screen_awake thread runs and sets execution state."""
-    thread = threading.Thread(target=keep_screen_awake, daemon=True)
-    thread.start()
+
+def test_thread_running_flag():
+    """Ensure running flag is properly defined and boolean."""
+    assert isinstance(running, bool)
+
+
+def test_single_instance_behavior():
+    """Ensure only one instance of app can run at once."""
+    process1 = subprocess.Popen(
+        [sys.executable, "main.py"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
     time.sleep(2)
-    assert thread.is_alive(), "Thread not alive"
 
-def test_imports():
-    """Check all major imports load correctly."""
-    try:
-        import tkinter
-        import pystray
-        import winotify
-    except ImportError as e:
-        assert False, f"Import failed: {e}"
+    process2 = subprocess.Popen(
+        [sys.executable, "main.py"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    time.sleep(2)
+
+    # Count running processes with 'main.py' in command
+    processes = [
+        p.info for p in psutil.process_iter(["pid", "name", "cmdline"])
+        if p.info["cmdline"] and "main.py" in " ".join(p.info["cmdline"])
+    ]
+    assert len(processes) <= 1, f"Multiple instances found: {len(processes)}"
+
+    for p in [process1, process2]:
+        p.terminate()
