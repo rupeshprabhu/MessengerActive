@@ -83,7 +83,7 @@ jobs:
 
   prerelease:
     name: Create Pre-Release
-    needs: build
+    needs: [build]
     runs-on: windows-latest
     if: github.ref == 'refs/heads/main'
 
@@ -109,7 +109,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.build.outputs.version }}
-          name: "MessengerActive v${{ needs.build.outputs.version }}"
+          name: MessengerActive v${{ needs.build.outputs.version }}
           prerelease: true
           files: dist/MessengerActive/**
         env:
