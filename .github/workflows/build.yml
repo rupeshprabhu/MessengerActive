@@ -88,8 +88,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-#      - name: Debug build job output
-#        run: echo "Build job version is: ${{ needs.build.outputs.version }}"
+      - name: Debug build job output
+        run: echo "Build job version is: ${{ needs.build.outputs.version }}"
 
 #      - name: Attempt to download build artifact
 #        id: download_artifact
