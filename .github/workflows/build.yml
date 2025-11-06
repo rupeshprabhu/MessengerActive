@@ -95,10 +95,12 @@ jobs:
 
           $version = "${{ steps.version.outputs.version }}"
           $newInstallerName = "${{ env.INSTALLER_BASE_NAME }}_$version.exe"
-          Rename-Item -Path $installerPath -NewName $newInstallerName -Force
-          Write-Host "✅ Renamed installer to: $newInstallerName"
+          $newInstallerPath = Join-Path (Join-Path $workspace ${{ env.INSTALLER_DIR }}) $newInstallerName
 
-      - name: 🔏 Self-sign the installer (temporary .pfx)
+          Rename-Item -Path $installerPath -NewName $newInstallerName -Force
+          Write-Host "✅ Renamed installer to: $newInstallerPath"
+
+      - name: 🔏 Self-sign the installer (temporary .pfx, fixed)
         shell: pwsh
         run: |
           Write-Host "🔏 Creating temporary code signing certificate (.pfx) and signing installer..."
@@ -113,11 +115,11 @@ jobs:
 
           $certPath = Join-Path $env:RUNNER_TEMP "temp_signing_cert.pfx"
           $password = "password123"
-          $publisher = "Rupesh Prabhu (MessengerActive)"
+          $securePassword = ConvertTo-SecureString -String $password -Force -AsPlainText
 
-          # Create self-signed certificate
+          # Create self-signed certificate with exportable private key
           $cert = New-SelfSignedCertificate `
-              -Subject "CN=$publisher" `
+              -Subject "CN=Rupesh Prabhu (MessengerActive)" `
               -DnsName "MessengerActive.local" `
               -CertStoreLocation "Cert:\CurrentUser\My" `
               -NotAfter (Get-Date).AddYears(1) `
@@ -126,11 +128,11 @@ jobs:
               -KeyAlgorithm RSA `
               -HashAlgorithm SHA256
 
-          # Export PFX
-          Export-PfxCertificate -Cert $cert -FilePath $certPath -Password (ConvertTo-SecureString -String $password -Force -AsPlainText)
+          # Export properly to PFX
+          Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $securePassword
           Write-Host "✅ Exported temporary PFX to $certPath"
 
-          # Find signtool.exe dynamically
+          # Locate signtool.exe
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -ErrorAction SilentlyContinue |
               Where-Object { $_.Name -eq "signtool.exe" -and $_.FullName -match "x64" } | Select-Object -First 1
           if (-not $signtool) {
@@ -142,7 +144,7 @@ jobs:
           Write-Host "✅ Found signtool at $($signtool.FullName)"
           $installerPath = $installer.FullName
 
-          # Sign installer
+          # Sign using /f PFX and password
           & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
               /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
 
