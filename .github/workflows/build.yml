@@ -50,7 +50,7 @@ jobs:
           $parts[-1] = [int]$parts[-1] + 1
           $newVersion = "$($parts -join '.')"
           Set-Content version.txt $newVersion
-          echo "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
+          echo "version=$newVersion" >> $env:GITHUB_OUTPUT
           Write-Host "Bumped version to $newVersion"
 
       - name: Debug version output
@@ -82,12 +82,12 @@ jobs:
 
   prerelease:
     name: Create Pre-Release
-    needs: [build]
+    needs: build
     runs-on: windows-latest
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Debug build job output
