@@ -30,6 +30,8 @@ jobs:
           pip install pyinstaller pytest psutil
 
       - name: Run tests
+        env:
+          PYTHONPATH: .
         run: pytest -v
 
       - name: Run single-instance test
