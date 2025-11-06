@@ -86,12 +86,9 @@ jobs:
     needs: build
     runs-on: windows-latest
     if: github.ref == 'refs/heads/main'
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          persist-credentials: true
 
       - name: Debug build job output
         run: echo "Build job version is: ${{ needs.build.outputs.version }}"
