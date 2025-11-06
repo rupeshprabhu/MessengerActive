@@ -39,6 +39,8 @@ jobs:
 
       - name: Bump version
         id: version
+        permissions:
+          contents: write
         run: |
           $version = Get-Content version.txt
           $parts = $version.Split('.')
