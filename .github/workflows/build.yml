@@ -8,19 +8,19 @@ on:
   release:
     types: [prereleased, released]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Test & Build Windows App
     runs-on: windows-latest
 
-    outputs:
-      version: ${{ steps.version.outputs.version }}  # ✅ Expose version for next job
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          persist-credentials: true  # ✅ Keep token available for push
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -59,14 +59,13 @@ jobs:
           git config --global user.email "actions@github.com"
           git add version.txt
           git commit -m "Bump version to ${{ steps.version.outputs.version }}" || echo "No changes to commit"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
+          git push origin HEAD:main  # ✅ Fixed: simpler and works with GITHUB_TOKEN
 
       - name: Build executable
         run: |
           pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico MessengerActive.py
 
       - name: Create setup (Inno Setup)
-        shell: pwsh
         run: |
           echo "Building installer..."
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
@@ -77,7 +76,6 @@ jobs:
           name: MessengerActive-${{ steps.version.outputs.version }}
           path: dist/MessengerActive
 
-
   prerelease:
     name: Create Pre-Release
     needs: build
@@ -87,6 +85,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
