@@ -227,6 +227,8 @@ root.geometry(f"300x110+{x}+{y}")
 # UI Elements
 ttk.Label(root, text="Teams is Active", font=("Segoe UI", 11)).pack(pady=10)
 ttk.Button(root, text="Exit", command=on_exit_confirm).pack()
+# Show app version
+ttk.Label(root, text=f"Version: {APP_VERSION}", font=("Segoe UI", 9), foreground="gray").pack(side="bottom", pady=5)
 
 # Bind minimize and close events
 root.protocol("WM_DELETE_WINDOW", on_exit_confirm)
@@ -239,3 +241,4 @@ if __name__ == "__main__":
     logging.info("MessengerActive started.")
     root.mainloop()
     logging.info("MessengerActive stopped.")
+
