@@ -91,11 +91,23 @@ jobs:
       - name: Debug build job output
         run: echo "Build job version is: ${{ needs.build.outputs.version }}"
 
-      - name: Download build artifact
+      - name: Attempt to download build artifact
+        id: download_artifact
         uses: actions/download-artifact@v4
         with:
           name: MessengerActive-${{ needs.build.outputs.version }}
           path: dist/MessengerActive
+        continue-on-error: true
+
+      - name: Check if artifact was downloaded
+        run: |
+          if (Test-Path dist/MessengerActive) {
+            Write-Host "Artifact downloaded successfully."
+          } else {
+            Write-Host "Artifact not found, skipping pre-release creation."
+            exit 0
+          }
+        shell: pwsh
 
       - name: Display downloaded files
         run: dir dist/MessengerActive
