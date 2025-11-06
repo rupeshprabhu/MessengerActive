@@ -3,6 +3,8 @@ import time
 import ctypes
 import win32api
 import win32con
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from main import keep_screen_awake, simulate_keypress, running
 
