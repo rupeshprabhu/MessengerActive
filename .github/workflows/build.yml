@@ -71,7 +71,7 @@ jobs:
           echo %cd%
           echo "Listing files..."
           dir
-          pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico main.py
+          pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico MessengerActive.py
 
       - name: Create setup (Inno Setup)
         run: |
