@@ -65,7 +65,12 @@ jobs:
           git push origin main
 
       - name: Build executable
+        working-directory: ${{ github.workspace }}
         run: |
+          echo "Current working directory:"
+          echo %cd%
+          echo "Listing files..."
+          dir
           pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico main.py
 
       - name: Create setup (Inno Setup)
