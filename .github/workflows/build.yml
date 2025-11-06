@@ -94,6 +94,11 @@ jobs:
           name: MessengerActive-${{ needs.build.outputs.version }}
           path: dist/MessengerActive
 
+      - name: Display downloaded files (debug)
+        run: |
+          echo "Downloaded artifact contents:"
+          dir dist/MessengerActive
+
       - name: Create Pre-release on GitHub
         uses: softprops/action-gh-release@v2
         with:
