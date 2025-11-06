@@ -6,7 +6,7 @@ on:
   pull_request:
   workflow_dispatch:
   release:
-    types: [prereleased, released]
+    types: [prerelease, released]
 
 permissions:
   contents: write
@@ -50,8 +50,8 @@ jobs:
           $parts[-1] = [int]$parts[-1] + 1
           $newVersion = "$($parts -join '.')"
           Set-Content version.txt $newVersion
-          echo "version=$newVersion" >> $env:GITHUB_OUTPUT
-          echo "Bumped version to $newVersion"
+          echo "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
+          Write-Host "Bumped version to $newVersion"
 
       - name: Debug version output
         run: echo "Version output is ${{ steps.version.outputs.version }}"
@@ -67,8 +67,7 @@ jobs:
           git push origin HEAD:main
 
       - name: Build executable
-        run: |
-          pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico MessengerActive.py
+        run: pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico MessengerActive.py
 
       - name: Create setup (Inno Setup)
         run: |
@@ -78,7 +77,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MessengerActive-${{ steps.version.outputs.version }}
+          name: "MessengerActive-${{ steps.version.outputs.version }}"
           path: dist/MessengerActive
 
   prerelease:
@@ -97,7 +96,7 @@ jobs:
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          name: MessengerActive-${{ needs.build.outputs.version }}
+          name: "MessengerActive-${{ needs.build.outputs.version }}"
           path: dist/MessengerActive
 
       - name: Display downloaded files
@@ -108,9 +107,9 @@ jobs:
       - name: Create Pre-release on GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.build.outputs.version }}
-          name: MessengerActive v${{ needs.build.outputs.version }}
+          tag_name: "v${{ needs.build.outputs.version }}"
+          name: "MessengerActive v${{ needs.build.outputs.version }}"
           prerelease: true
-          files: dist/MessengerActive/**
+          files: "dist/MessengerActive/**"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
