@@ -13,7 +13,8 @@ permissions:
 
 env:
   BUILD_DIR: dist
-  INSTALLER_NAME: MessengerActive_Setup.exe
+  INSTALLER_DIR: Output
+  INSTALLER_BASE_NAME: MessengerActive_Setup
 
 jobs:
   build:
@@ -72,14 +73,23 @@ jobs:
             Write-Error "Executable not found after PyInstaller!"
             exit 1
           }
+          Write-Host "Executable successfully built."
 
       - name: Create installer (Inno Setup)
+        shell: pwsh
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
-          if (-not (Test-Path "$env:BUILD_DIR/$env:INSTALLER_NAME")) {
-            Write-Error "Installer not found after Inno Setup!"
+          $installerPath = "$env:INSTALLER_DIR/${{ env.INSTALLER_BASE_NAME }}.exe"
+          if (-not (Test-Path $installerPath)) {
+            Write-Error "Installer not found after Inno Setup! Expected at $installerPath"
             exit 1
           }
+
+          # Rename installer to include version number
+          $version = "${{ steps.version.outputs.version }}"
+          $newInstaller = "$env:INSTALLER_DIR/${{ env.INSTALLER_BASE_NAME }}_$version.exe"
+          Rename-Item -Path $installerPath -NewName $newInstaller
+          Write-Host "Renamed installer to: $newInstaller"
 
       - name: Archive source code
         run: |
@@ -91,7 +101,7 @@ jobs:
         with:
           name: messengeractive-artifacts
           path: |
-            ${{ env.BUILD_DIR }}/MessengerActive_Setup.exe
+            ${{ env.INSTALLER_DIR }}/${{ env.INSTALLER_BASE_NAME }}_${{ steps.version.outputs.version }}.exe
             source_code.zip
             source_code.tar.gz
 
@@ -117,7 +127,7 @@ jobs:
           Write-Host "Downloaded files:"
           Get-ChildItem release | ForEach-Object { Write-Host $_.FullName }
 
-          if (-not (Test-Path "release/MessengerActive_Setup.exe")) {
+          if (-not (Test-Path "release/${{ env.INSTALLER_BASE_NAME }}_${{ needs.build.outputs.version }}.exe")) {
             Write-Error "Installer not found!"
             exit 1
           }
@@ -129,6 +139,7 @@ jobs:
             Write-Error "Source tar.gz not found!"
             exit 1
           }
+          Write-Host "All expected files verified successfully."
 
       - name: Create Pre-release on GitHub
         uses: softprops/action-gh-release@v2
@@ -137,7 +148,7 @@ jobs:
           name: "MessengerActive v${{ needs.build.outputs.version }}"
           prerelease: true
           files: |
-            release/MessengerActive_Setup.exe
+            release/${{ env.INSTALLER_BASE_NAME }}_${{ needs.build.outputs.version }}.exe
             release/source_code.zip
             release/source_code.tar.gz
         env:
