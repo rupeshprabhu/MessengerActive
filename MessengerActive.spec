@@ -1,12 +1,21 @@
-# messenger_active.spec
+# MessengerActive.spec
+# Purpose: Package MessengerActive with version.txt and ma_icon.ico included
+
 block_cipher = None
 
 a = Analysis(
     ['MessengerActive.py'],
     pathex=[],
     binaries=[],
-    datas=[('ma_icon.ico', '.')],
-    hiddenimports=['win32timezone', 'pystray._win32', 'winotify'],
+    datas=[
+        ('version.txt', '.'),      # include version.txt
+        ('ma_icon.ico', '.')       # include icon
+    ],
+    hiddenimports=[
+        'win32timezone',
+        'pystray._win32',
+        'winotify'
+    ],
     hookspath=[],
     runtime_hooks=[],
     excludes=[],
@@ -28,7 +37,7 @@ exe = EXE(
     debug=False,
     strip=False,
     upx=True,
-    console=False,  # no console
+    console=False,   # no terminal window
     icon='ma_icon.ico',
 )
 

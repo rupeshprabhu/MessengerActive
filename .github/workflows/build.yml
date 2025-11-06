@@ -36,7 +36,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller pytest psutil
+          pip install pyinstaller pytest psutil pillow pystray pywin32 winotify
 
       - name: Run tests
         run: pytest -v
@@ -90,6 +90,26 @@ jobs:
           $newInstallerName = "${{ env.INSTALLER_BASE_NAME }}_$version.exe"
           Rename-Item -Path $installerPath -NewName $newInstallerName
           Write-Host "Renamed installer to: Output\$newInstallerName"
+
+      # ✅ Self-sign the installer (temporary local certificate)
+      - name: Self-Sign Installer
+        shell: pwsh
+        run: |
+          Write-Host "🔏 Creating temporary code signing certificate..."
+          $certSubject = "CN=MessengerActive (Test Signing)"
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $certSubject -CertStoreLocation Cert:\CurrentUser\My
+          $certThumbprint = $cert.Thumbprint
+
+          $installer = Get-ChildItem -Path ".\Output" -Filter "MessengerActive_Setup_*.exe" | Select-Object -First 1
+          if (-not $installer) {
+            Write-Error "Installer not found in Output folder!"
+            exit 1
+          }
+
+          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\x64\signtool.exe"
+          & $signtool sign /n $certSubject /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $installer.FullName
+
+          Write-Host "✅ Installer signed with temporary self-signed certificate."
 
       - name: Archive source code
         run: |
