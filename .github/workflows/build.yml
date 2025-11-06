@@ -16,7 +16,7 @@ jobs:
     name: Test & Build Windows App
     runs-on: windows-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      version: ${{ steps.set_version.outputs.version }}
 
     steps:
       - name: Checkout repository
@@ -40,7 +40,7 @@ jobs:
         run: pytest -v tests/test_single_instance.py
 
       - name: Bump version
-        id: version
+        id: set_version
         shell: pwsh
         run: |
           $version = Get-Content version.txt
@@ -48,7 +48,7 @@ jobs:
           $parts[-1] = [int]$parts[-1] + 1
           $newVersion = "$($parts -join '.')"
           Set-Content version.txt $newVersion
-          Write-Output "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
+          Write-Host "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
           Write-Host "Bumped version to $newVersion"
 
       - name: Commit version bump
@@ -58,13 +58,13 @@ jobs:
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
           git add version.txt
-          git commit -m "Bump version to ${{ steps.version.outputs.version }}" || echo "No changes to commit"
+          git commit -m "Bump version to ${{ steps.set_version.outputs.version }}" || echo "No changes to commit"
           git push origin HEAD:main
 
       - name: Build executable
         run: pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico MessengerActive.py
 
-      - name: Create setup (Inno Setup)
+      - name: Create installer (Inno Setup)
         run: |
           echo "Building installer..."
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
@@ -72,7 +72,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "MessengerActive-${{ steps.version.outputs.version }}"
+          name: messengeractive-artifact
           path: dist/MessengerActive
 
   prerelease:
@@ -85,13 +85,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set build version
+      - name: Set build version from previous job
         run: echo "BUILD_VERSION=${{ needs.build.outputs.version }}" >> $GITHUB_ENV
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          name: "MessengerActive-${{ env.BUILD_VERSION }}"
+          name: messengeractive-artifact
           path: release
 
       - name: Verify downloaded files
