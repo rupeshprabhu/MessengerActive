@@ -11,13 +11,44 @@ import pystray
 import win32api
 import win32con
 from winotify import Notification
+import win32event
+import winerror
+import win32gui
 
 APP_NAME = "MessengerActive"
-# APP_VERSION = "1.0"
 
+# === Single Instance Protection ===
+MUTEX_NAME = f"{APP_NAME}_SINGLE_INSTANCE"
+
+mutex = win32event.CreateMutex(None, False, MUTEX_NAME)
+last_error = win32api.GetLastError()
+
+def bring_existing_window_to_front():
+    """Locate and focus the existing MessengerActive window if it exists."""
+    try:
+        hwnd = win32gui.FindWindow(None, APP_NAME)
+        if hwnd:
+            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+            win32gui.SetForegroundWindow(hwnd)
+            return True
+    except Exception:
+        pass
+    return False
+
+if last_error == winerror.ERROR_ALREADY_EXISTS:
+    # Another instance already running
+    if not bring_existing_window_to_front():
+        ctypes.windll.user32.MessageBoxW(
+            0,
+            f"{APP_NAME} is already running.",
+            APP_NAME,
+            0x40  # MB_ICONINFORMATION
+        )
+    sys.exit(0)
+
+# === Version Read ===
 with open(os.path.join(os.path.dirname(__file__), "version.txt"), "r") as vf:
     APP_VERSION = vf.read().strip()
-
 
 # === Logging setup ===
 appdata_path = os.getenv("APPDATA")
@@ -68,7 +99,6 @@ ES_DISPLAY_REQUIRED = 0x00000002
 def simulate_keypress():
     """A tiny keypress to keep some systems from considering the user idle."""
     try:
-        # Press and release SHIFT
         win32api.keybd_event(win32con.VK_SHIFT, 0, 0, 0)
         win32api.keybd_event(win32con.VK_SHIFT, 0, win32con.KEYEVENTF_KEYUP, 0)
         logging.debug("Simulated keypress.")
@@ -78,7 +108,6 @@ def simulate_keypress():
 def keep_screen_awake():
     """Thread target to periodically prevent sleep and inject occasional keypresses."""
     last_keypress = time.time()
-    # We continuously set execution state to keep system awake
     while running:
         try:
             ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)
