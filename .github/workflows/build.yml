@@ -36,7 +36,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller pytest psutil pillow pystray pywin32 winotify
+          pip install pyinstaller pytest psutil
 
       - name: Run tests
         run: pytest -v
@@ -77,39 +77,50 @@ jobs:
       - name: Create installer (Inno Setup)
         shell: pwsh
         run: |
-          Write-Host "Running Inno Setup compiler..."
+          Write-Host "📦 Running Inno Setup compiler..."
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
 
           $installerPath = "D:\a\MessengerActive\MessengerActive\Output\MessengerActive_Setup.exe"
           if (-not (Test-Path $installerPath)) {
-            Write-Error "Installer not found after Inno Setup! Expected at $installerPath"
+            Write-Error "Installer not found after Inno Setup!"
             exit 1
           }
 
           $version = "${{ steps.version.outputs.version }}"
           $newInstallerName = "${{ env.INSTALLER_BASE_NAME }}_$version.exe"
-          Rename-Item -Path $installerPath -NewName $newInstallerName
-          Write-Host "Renamed installer to: Output\$newInstallerName"
+          Rename-Item -Path $installerPath -NewName $newInstallerName -Force
+          Write-Host "✅ Renamed installer to: Output\$newInstallerName"
 
-      # ✅ Self-sign the installer (temporary local certificate)
-      - name: Self-Sign Installer
+      - name: Self-sign the installer
         shell: pwsh
         run: |
           Write-Host "🔏 Creating temporary code signing certificate..."
-          $certSubject = "CN=MessengerActive (Test Signing)"
-          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $certSubject -CertStoreLocation Cert:\CurrentUser\My
-          $certThumbprint = $cert.Thumbprint
+          $certPath = "$env:RUNNER_TEMP\temp_signing_cert.pfx"
+          $certSubject = "CN=MessengerActive Temporary Certificate"
+          $password = "password123"
 
-          $installer = Get-ChildItem -Path ".\Output" -Filter "MessengerActive_Setup_*.exe" | Select-Object -First 1
-          if (-not $installer) {
-            Write-Error "Installer not found in Output folder!"
+          # Create a temporary self-signed cert
+          $cert = New-SelfSignedCertificate -DnsName "MessengerActive.local" -CertStoreLocation "Cert:\CurrentUser\My"
+          Export-PfxCertificate -Cert $cert -FilePath $certPath -Password (ConvertTo-SecureString -String $password -Force -AsPlainText)
+
+          # Dynamically locate signtool.exe
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq "signtool.exe" } | Select-Object -First 1
+
+          if (-not $signtool) {
+            Write-Error "❌ signtool.exe not found on this runner!"
             exit 1
           }
 
-          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\x64\signtool.exe"
-          & $signtool sign /n $certSubject /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $installer.FullName
+          Write-Host "✅ Found signtool at $($signtool.FullName)"
+          $installer = Get-ChildItem "D:\a\MessengerActive\MessengerActive\Output" -Filter "MessengerActive_Setup_*.exe" | Select-Object -First 1
 
-          Write-Host "✅ Installer signed with temporary self-signed certificate."
+          if (-not $installer) {
+            Write-Error "❌ Installer file not found for signing!"
+            exit 1
+          }
+
+          & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $installer.FullName
+          Write-Host "✅ Successfully self-signed installer."
 
       - name: Archive source code
         run: |
@@ -144,19 +155,19 @@ jobs:
       - name: Verify downloaded files
         shell: pwsh
         run: |
-          Write-Host "Downloaded files:"
+          Write-Host "📂 Downloaded files:"
           Get-ChildItem -Recurse release | ForEach-Object { Write-Host $_.FullName }
 
-          if (-not (Test-Path "release/Output/MessengerActive_Setup_*.exe")) {
-            Write-Error "Installer not found in release/Output/"
+          if (-not (Get-ChildItem "release/Output" -Filter "MessengerActive_Setup_*.exe")) {
+            Write-Error "❌ Installer not found in release/Output/"
             exit 1
           }
           if (-not (Test-Path "release/source_code.zip")) {
-            Write-Error "Source zip not found!"
+            Write-Error "❌ Source zip not found!"
             exit 1
           }
           if (-not (Test-Path "release/source_code.tar.gz")) {
-            Write-Error "Source tar.gz not found!"
+            Write-Error "❌ Source tar.gz not found!"
             exit 1
           }
 
