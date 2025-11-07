@@ -32,8 +32,6 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 [Files]
 ; Include everything from dist\MessengerActive (including _internal)
 Source: "dist\MessengerActive.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "ma_icon.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "config.yaml"; DestDir: "{app}"; Flags: ignoreversion
 
 
 [Icons]
