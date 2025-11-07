@@ -90,7 +90,7 @@ jobs:
           Rename-Item -Path $installerPath -NewName $newInstallerName -Force
           Write-Host "✅ Renamed installer to: $newInstallerName"
 
-      - name: 🔏 Self-sign the installer (CI & Production)
+      - name: 🔏 Self-sign the installer
         shell: pwsh
         run: |
           Write-Host "🔏 Creating temporary code signing certificate (.pfx) and signing installer..."
@@ -154,9 +154,10 @@ jobs:
               )
 
               $proc = Start-Process -FilePath $signtool.FullName -ArgumentList $args -PassThru
-              if ($proc.WaitForExit(300000)) {
+              if ($proc.WaitForExit(120000)) {  # 2 minutes per server
                   if ($LASTEXITCODE -eq 0) {
                       $signed = $true
+                      Write-Host "✅ Successfully signed with timestamp server: $server"
                       break
                   } else {
                       Write-Host "⚠️ Signing failed with $server, trying next server..."
