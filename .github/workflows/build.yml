@@ -83,10 +83,22 @@ jobs:
       - name: 📦 Create installer (Inno Setup)
         shell: pwsh
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
           $workspace = $env:GITHUB_WORKSPACE
-          $installerPath = Get-ChildItem -Path (Join-Path $workspace ${{ env.INSTALLER_DIR }}) -Filter "MessengerActive_Setup*.exe" | Select-Object -First 1
+          $exePath = Join-Path $workspace "$env:BUILD_DIR\MessengerActive.exe"
+          if (-not (Test-Path $exePath)) { Write-Error "Executable not found for installer!"; exit 1 }
+
+          # Optionally, copy to Output folder to match your current structure
+          $outputDir = Join-Path $workspace $env:INSTALLER_DIR
+          if (-not (Test-Path $outputDir)) { New-Item -Path $outputDir -ItemType Directory | Out-Null }
+          Copy-Item $exePath -Destination $outputDir -Force
+
+          # Run Inno Setup
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
+
+          # Rename the installer with version
+          $installerPath = Get-ChildItem -Path $outputDir -Filter "MessengerActive_Setup*.exe" | Select-Object -First 1
           if (-not $installerPath) { Write-Error "Installer not found after Inno Setup!"; exit 1 }
+
           $version = "${{ steps.version.outputs.version }}"
           $newInstallerName = "${{ env.INSTALLER_BASE_NAME }}_$version.exe"
           Rename-Item -Path $installerPath.FullName -NewName $newInstallerName -Force
