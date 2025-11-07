@@ -90,7 +90,7 @@ jobs:
           Rename-Item -Path $installerPath -NewName $newInstallerName -Force
           Write-Host "✅ Renamed installer to: $newInstallerName"
 
-      - name: 🔏 Self-sign the installer
+      - name: 🔏 Self-sign the installer with fallback timestamp
         shell: pwsh
         run: |
           Write-Host "🔏 Creating temporary code signing certificate (.pfx) and signing installer..."
@@ -154,7 +154,7 @@ jobs:
               )
 
               $proc = Start-Process -FilePath $signtool.FullName -ArgumentList $args -PassThru
-              if ($proc.WaitForExit(120000)) {  # 2 minutes per server
+              if ($proc.WaitForExit(120000)) {  # 2 min timeout
                   if ($LASTEXITCODE -eq 0) {
                       $signed = $true
                       Write-Host "✅ Successfully signed with timestamp server: $server"
@@ -169,8 +169,8 @@ jobs:
           }
 
           if (-not $signed) {
-              Write-Warning "❌ All timestamp servers failed, signing installer without timestamp"
-              & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
+              Write-Warning "❌ All timestamp servers failed, signing installer using fallback Authenticode timestamp (/t)"
+              & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /t http://timestamp.verisign.com/scripts/timstamp.dll /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
           }
 
           # Verify signature
