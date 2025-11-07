@@ -102,47 +102,41 @@ jobs:
           $certPath = Join-Path $env:RUNNER_TEMP "temp_signing_cert.pfx"
           $password = "password123"
 
-          # Create self-signed certificate
+          # ✅ Create a temporary self-signed certificate (no Trusted Root or Publisher import)
           $cert = New-SelfSignedCertificate `
-              -Subject "CN=Rupesh Prabhu (MessengerActive)" `
-              -DnsName "MessengerActive.local" `
+              -Subject "CN=MessengerActive Developer Certificate" `
               -CertStoreLocation "Cert:\CurrentUser\My" `
-              -NotAfter (Get-Date).AddYears(1) `
               -KeyExportPolicy Exportable `
-              -KeyLength 2048 `
               -KeyAlgorithm RSA `
-              -HashAlgorithm SHA256
+              -KeyLength 2048 `
+              -HashAlgorithm SHA256 `
+              -NotAfter (Get-Date).AddDays(7)
 
-          # Import into Trusted Root
-          $rootStore = New-Object System.Security.Cryptography.X509Certificates.X509Store "Root","CurrentUser"
-          $rootStore.Open("ReadWrite")
-          $rootStore.Add($cert)
-          $rootStore.Close()
+          # ✅ Export directly to PFX
+          Export-PfxCertificate -Cert $cert `
+              -FilePath $certPath `
+              -Password (ConvertTo-SecureString -String $password -Force -AsPlainText) `
+              -Force
 
-          # Import into Trusted Publisher
-          $pubStore = New-Object System.Security.Cryptography.X509Certificates.X509Store "TrustedPublisher","CurrentUser"
-          $pubStore.Open("ReadWrite")
-          $pubStore.Add($cert)
-          $pubStore.Close()
+          Write-Host "✅ Exported temporary PFX certificate to: $certPath"
 
-          # Export to PFX (needed for signtool)
-          Export-PfxCertificate -Cert $cert -FilePath $certPath -Password (ConvertTo-SecureString -String $password -Force -AsPlainText) -Force
-          Write-Host "✅ Exported temporary PFX to $certPath"
-
-          # Locate signtool.exe
-          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -Filter signtool.exe | Select-Object -First 1
+          # ✅ Locate signtool.exe
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $signtool) { Write-Error "signtool.exe not found"; exit 1 }
 
           $installerPath = $installer.FullName
 
-          # Sign using PFX
-          Write-Host "🔏 Signing installer with temporary self-signed certificate..."
-          & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
+          # ✅ Sign using PFX
+          Write-Host "🔏 Signing installer..."
+          & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /d "MessengerActive Internal Test Build" $installerPath
 
-          # Verify signature
+          # ✅ Verify signature
           & $signtool.FullName verify /pa /v $installerPath
-          if ($LASTEXITCODE -ne 0) { Write-Error "❌ Signature verification failed"; exit 1 }
-          Write-Host "✅ Signed and verified successfully"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "❌ Signature verification failed!"
+            exit 1
+          }
+          Write-Host "✅ Self-signing complete and verified!"
 
       - name: 📚 Archive source code
         run: |
