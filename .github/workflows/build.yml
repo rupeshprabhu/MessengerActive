@@ -95,8 +95,8 @@ jobs:
         run: |
           Write-Host "🔏 Signing installer..."
           $workspace = $env:GITHUB_WORKSPACE
-          $installerDir = Join-Path $workspace "${{ env.INSTALLER_DIR }}"
-          $installer = Get-ChildItem -Path $installerDir -Filter "${{ env.INSTALLER_BASE_NAME }}_*.exe" | Select-Object -First 1
+          $installerDir = Join-Path $workspace "Output"
+          $installer = Get-ChildItem -Path $installerDir -Filter "MessengerActive_Setup_*.exe" | Select-Object -First 1
           if (-not $installer) { Write-Error "Installer not found for signing"; exit 1 }
 
           $certPath = Join-Path $env:RUNNER_TEMP "temp_signing_cert.pfx"
@@ -113,8 +113,9 @@ jobs:
               -KeyAlgorithm RSA `
               -HashAlgorithm SHA256
 
-          # Export to PFX
-          Export-PfxCertificate -Cert $cert -FilePath $certPath -Password (ConvertTo-SecureString -String $password -Force -AsPlainText) -Force
+          # Export to PFX correctly
+          $securePassword = ConvertTo-SecureString -String $password -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $securePassword -Force
           Write-Host "✅ Exported temporary PFX to $certPath"
 
           # Locate signtool.exe
@@ -128,41 +129,9 @@ jobs:
 
           $installerPath = $installer.FullName
 
-          # Check if cert is self-signed
-          $isSelfSigned = $true
-          if ($isSelfSigned) {
-              Write-Warning "⚠️ Using self-signed certificate, timestamp servers will be skipped"
-              & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
-          } else {
-              $timestampServers = @(
-                  "http://timestamp.digicert.com",
-                  "http://timestamp.globalsign.com/scripts/timstamp.dll"
-              )
-              $signed = $false
-              foreach ($server in $timestampServers) {
-                  Write-Host "⏱ Attempting to sign using timestamp server: $server"
-                  $args = @(
-                      "sign",
-                      "/f", $certPath,
-                      "/p", $password,
-                      "/fd", "SHA256",
-                      "/tr", $server,
-                      "/td", "SHA256",
-                      "/d", "MessengerActive Installer",
-                      "/du", "https://github.com/rupeshprabhu/MessengerActive",
-                      $installerPath
-                  )
-                  $proc = Start-Process -FilePath $signtool.FullName -ArgumentList $args -PassThru
-                  if ($proc.WaitForExit(300000) -and $LASTEXITCODE -eq 0) {
-                      $signed = $true
-                      break
-                  }
-              }
-              if (-not $signed) {
-                  Write-Warning "❌ Timestamp servers failed, signing without timestamp"
-                  & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
-              }
-          }
+          # Sign using self-signed certificate
+          Write-Warning "⚠️ Using self-signed certificate, skipping timestamp servers"
+          & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
 
           # Verify signature
           & $signtool.FullName verify /pa /v $installerPath
