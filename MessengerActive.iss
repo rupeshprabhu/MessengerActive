@@ -2,7 +2,7 @@
 ; MessengerActive Installer
 ; =============================
 #define MyAppName "MessengerActive"
-#define MyAppVersion "1.0"
+#define MyAppVersion "1.0.46"
 #define MyAppPublisher "Absolute Gizmos by Rupesh Prabhu"
 #define MyAppExeName "MessengerActive.exe"
 
@@ -31,7 +31,10 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 
 [Files]
 ; Include everything from dist\MessengerActive (including _internal)
-Source: "dist\MessengerActive\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\MessengerActive.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "ma_icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "config.yaml"; DestDir: "{app}"; Flags: ignoreversion
+
 
 [Icons]
 ; Start Menu shortcut
