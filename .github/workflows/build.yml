@@ -69,7 +69,8 @@ jobs:
       - name: 🏗️ Build executable (onefile)
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --onefile --windowed --icon ma_icon.ico MessengerActive.py
+          pyinstaller --noconfirm --onefile --windowed --icon ma_icon.ico MessengerActive.py --add-data "version.txt;."
+
 
           $exePath = Join-Path $env:BUILD_DIR "MessengerActive.exe"
           if (-not (Test-Path $exePath)) {

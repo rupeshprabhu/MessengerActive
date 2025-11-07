@@ -47,8 +47,19 @@ if last_error == winerror.ERROR_ALREADY_EXISTS:
     sys.exit(0)
 
 # === Version Read ===
-with open(os.path.join(os.path.dirname(__file__), "version.txt"), "r") as vf:
+# Determine base path
+if getattr(sys, 'frozen', False):
+    # Running from PyInstaller onefile exe
+    base_path = sys._MEIPASS
+else:
+    # Running from source code
+    base_path = os.path.dirname(__file__)
+
+# Read version.txt
+version_file = os.path.join(base_path, "version.txt")
+with open(version_file, "r") as vf:
     APP_VERSION = vf.read().strip()
+
 
 # === Logging setup ===
 appdata_path = os.getenv("APPDATA")
