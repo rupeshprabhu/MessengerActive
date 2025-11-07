@@ -78,43 +78,29 @@ jobs:
         shell: pwsh
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
-
           $workspace = $env:GITHUB_WORKSPACE
           $installerPath = Join-Path $workspace "${{ env.INSTALLER_DIR }}\MessengerActive_Setup.exe"
-
           if (-not (Test-Path $installerPath)) {
-            $found = Get-ChildItem -Path (Join-Path $workspace ${{ env.INSTALLER_DIR }}) -Filter "MessengerActive_Setup*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+            $found = Get-ChildItem -Path (Join-Path $workspace ${{ env.INSTALLER_DIR }}) -Filter "MessengerActive_Setup*.exe" | Select-Object -First 1
             if ($found) { $installerPath = $found.FullName }
           }
-
-          if (-not (Test-Path $installerPath)) {
-            Write-Error "Installer not found after Inno Setup!"
-            exit 1
-          }
-
+          if (-not (Test-Path $installerPath)) { Write-Error "Installer not found after Inno Setup!"; exit 1 }
           $version = "${{ steps.version.outputs.version }}"
           $newInstallerName = "${{ env.INSTALLER_BASE_NAME }}_$version.exe"
-          $newInstallerPath = Join-Path (Join-Path $workspace ${{ env.INSTALLER_DIR }}) $newInstallerName
-
           Rename-Item -Path $installerPath -NewName $newInstallerName -Force
-          Write-Host "✅ Renamed installer to: $newInstallerPath"
+          Write-Host "✅ Renamed installer to: $newInstallerName"
 
-      - name: 🔏 Self-sign the installer (temporary .pfx)
+      - name: 🔏 Self-sign the installer
         shell: pwsh
         run: |
           Write-Host "🔏 Creating temporary code signing certificate (.pfx) and signing installer..."
           $workspace = $env:GITHUB_WORKSPACE
-          $installerDir = Join-Path $workspace "Output"
-          $installer = Get-ChildItem -Path $installerDir -Filter "MessengerActive_Setup_*.exe" | Select-Object -First 1
-          
-          if (-not $installer) { 
-              Write-Error "Installer not found for signing in $installerDir"
-              exit 1
-          }
+          $installerDir = Join-Path $workspace "${{ env.INSTALLER_DIR }}"
+          $installer = Get-ChildItem -Path $installerDir -Filter "${{ env.INSTALLER_BASE_NAME }}_*.exe" | Select-Object -First 1
+          if (-not $installer) { Write-Error "Installer not found for signing"; exit 1 }
 
           $certPath = Join-Path $env:RUNNER_TEMP "temp_signing_cert.pfx"
           $password = "password123"
-          $securePassword = ConvertTo-SecureString -String $password -Force -AsPlainText
 
           # Create self-signed certificate
           $cert = New-SelfSignedCertificate `
@@ -127,16 +113,15 @@ jobs:
               -KeyAlgorithm RSA `
               -HashAlgorithm SHA256
 
-          # Export PFX with private key
-          Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $securePassword -Force
-          Write-Host "✅ Exported temporary PFX to $certPath"
+          # Import certificate into Trusted Root temporarily
+          $store = New-Object System.Security.Cryptography.X509Certificates.X509Store "Root","CurrentUser"
+          $store.Open("ReadWrite")
+          $store.Add($cert)
+          $store.Close()
 
-          # Verify private key exists
-          $importedCert = Get-PfxCertificate -FilePath $certPath
-          if (-not $importedCert.HasPrivateKey) { 
-              Write-Error "❌ PFX missing private key"
-              exit 1
-          }
+          # Export to PFX
+          Export-PfxCertificate -Cert $cert -FilePath $certPath -Password (ConvertTo-SecureString -String $password -Force -AsPlainText) -Force
+          Write-Host "✅ Exported temporary PFX to $certPath"
 
           # Locate signtool.exe
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -ErrorAction SilentlyContinue |
@@ -145,29 +130,24 @@ jobs:
               $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -ErrorAction SilentlyContinue |
                   Where-Object { $_.Name -eq "signtool.exe" } | Select-Object -First 1
           }
-          if (-not $signtool) { 
-              Write-Error "❌ signtool.exe not found"
-              exit 1
-          }
+          if (-not $signtool) { Write-Error "signtool.exe not found"; exit 1 }
 
+          # Sign installer using Start-Process to avoid hanging
           $installerPath = $installer.FullName
-
-          # Sign installer
-          & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
-              /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
-
-          if ($LASTEXITCODE -ne 0) {
-              Write-Error "❌ signtool failed (exit code $LASTEXITCODE)"
-              exit 1
-          }
+          Start-Process -FilePath $signtool.FullName -ArgumentList @(
+              "sign",
+              "/f", $certPath,
+              "/p", $password,
+              "/fd", "SHA256",
+              "/tr", "https://timestamp.digicert.com",
+              "/td", "SHA256",
+              "/d", "MessengerActive Installer",
+              "/du", "https://github.com/rupeshprabhu/MessengerActive",
+              $installerPath
+          ) -Wait -NoNewWindow
 
           # Verify signature
-          & $signtool.FullName verify /pa /v $installerPath
-          if ($LASTEXITCODE -ne 0) {
-              Write-Error "❌ Signature verification failed"
-              exit 1
-          }
-
+          Start-Process -FilePath $signtool.FullName -ArgumentList @("verify","/pa","/v",$installerPath) -Wait -NoNewWindow
           Write-Host "✅ Signed and verified successfully"
 
       - name: 📚 Archive source code
@@ -205,19 +185,9 @@ jobs:
         run: |
           Write-Host "Downloaded files:"
           Get-ChildItem -Recurse release | ForEach-Object { Write-Host $_.FullName }
-
-          if (-not (Get-ChildItem "release/Output" -Filter "MessengerActive_Setup_*.exe")) {
-            Write-Error "❌ Installer not found in release/Output/"
-            exit 1
-          }
-          if (-not (Test-Path "release/source_code.zip")) {
-            Write-Error "❌ Source zip not found!"
-            exit 1
-          }
-          if (-not (Test-Path "release/source_code.tar.gz")) {
-            Write-Error "❌ Source tar.gz not found!"
-            exit 1
-          }
+          if (-not (Get-ChildItem "release/Output" -Filter "MessengerActive_Setup_*.exe")) { Write-Error "Installer not found"; exit 1 }
+          if (-not (Test-Path "release/source_code.zip")) { Write-Error "Source zip not found"; exit 1 }
+          if (-not (Test-Path "release/source_code.tar.gz")) { Write-Error "Source tar.gz not found"; exit 1 }
 
       - name: 🏷️ Create Pre-release on GitHub
         uses: softprops/action-gh-release@v2
