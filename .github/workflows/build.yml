@@ -18,7 +18,7 @@ env:
 
 jobs:
   build:
-    name: 🧪 Test, Build & Package Windows App
+    name: 🧪 Test & Build Windows App
     runs-on: windows-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -54,8 +54,7 @@ jobs:
           $newVersion = "$($parts -join '.')"
           Set-Content version.txt $newVersion
           echo "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
-          echo "VERSION=$newVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
-          Write-Host "✅ Version bumped to $newVersion"
+          Write-Host "✅ Bumped version to $newVersion"
 
       - name: 💾 Commit version bump
         env:
@@ -67,7 +66,7 @@ jobs:
           git commit -m "Bump version to ${{ steps.version.outputs.version }}" || echo "No changes to commit"
           git push origin HEAD:main
 
-      - name: 🏗️ Build executable (PyInstaller onefile)
+      - name: 🏗️ Build executable (onefile)
         shell: pwsh
         run: |
           pyinstaller --noconfirm --onefile --windowed --icon ma_icon.ico MessengerActive.py
@@ -78,37 +77,37 @@ jobs:
             exit 1
           }
 
+          # Copy executable to Output folder for Inno Setup
           $outputDir = Join-Path $env:GITHUB_WORKSPACE $env:INSTALLER_DIR
           if (-not (Test-Path $outputDir)) { New-Item -Path $outputDir -ItemType Directory | Out-Null }
           Copy-Item $exePath -Destination $outputDir -Force
-          Write-Host "✅ Executable copied to Output folder"
+
+      - name: 📝 Update ISS file with version
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          (Get-Content MessengerActive.iss) -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"$version`"" | Set-Content MessengerActive.iss
 
       - name: 📦 Create installer (Inno Setup)
         shell: pwsh
         run: |
-          # Update AppVersion in ISS file
-          $issPath = "MessengerActive.iss"
-          (Get-Content $issPath) -replace 'AppVersion=.*', "AppVersion=$env:VERSION" | Set-Content $issPath
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
 
-          # Compile installer
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" $issPath
-
-          # Rename installer to include version
           $installerPath = Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE $env:INSTALLER_DIR) -Filter "MessengerActive_Setup*.exe" | Select-Object -First 1
           if (-not $installerPath) { Write-Error "Installer not found after Inno Setup!"; exit 1 }
 
-          $newInstallerName = "MessengerActive_Setup_$($env:VERSION).exe"
+          $newInstallerName = "MessengerActive_Setup_$($version).exe"
           Rename-Item -Path $installerPath.FullName -NewName $newInstallerName -Force
           Write-Host "✅ Installer created: $newInstallerName"
 
-      - name: ⬆️ Upload installer artifact
+      - name: ⬆️ Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: messengeractive-setup
-          path: Output/MessengerActive_Setup_*.exe
+          path: ${{ env.INSTALLER_DIR }}/MessengerActive_Setup_*.exe
 
-  prerelease:
-    name: 🚀 Create Pre-Release
+  release:
+    name: 🚀 Create GitHub Release
     needs: build
     runs-on: windows-latest
     if: github.ref == 'refs/heads/main'
@@ -117,18 +116,18 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: 📦 Download build artifacts
+      - name: 📦 Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: messengeractive-setup
           path: release
 
-      - name: 🏷️ Create Pre-release on GitHub
+      - name: 🏷️ Create Release on GitHub
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ needs.build.outputs.version }}"
           name: "MessengerActive v${{ needs.build.outputs.version }}"
-          prerelease: true
-          files: release/Output/MessengerActive_Setup_*.exe
+          prerelease: false
+          files: release/MessengerActive_Setup_*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
