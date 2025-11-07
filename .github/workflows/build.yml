@@ -90,7 +90,7 @@ jobs:
           Rename-Item -Path $installerPath -NewName $newInstallerName -Force
           Write-Host "✅ Renamed installer to: $newInstallerName"
 
-      - name: 🔏 Self-sign the installer
+      - name: 🔏 Self-sign the installer (CI & Production)
         shell: pwsh
         run: |
           Write-Host "🔏 Creating temporary code signing certificate (.pfx) and signing installer..."
@@ -132,22 +132,49 @@ jobs:
           }
           if (-not $signtool) { Write-Error "signtool.exe not found"; exit 1 }
 
-          # Sign installer using Start-Process to avoid hanging
           $installerPath = $installer.FullName
-          Start-Process -FilePath $signtool.FullName -ArgumentList @(
-              "sign",
-              "/f", $certPath,
-              "/p", $password,
-              "/fd", "SHA256",
-              "/tr", "https://timestamp.digicert.com",
-              "/td", "SHA256",
-              "/d", "MessengerActive Installer",
-              "/du", "https://github.com/rupeshprabhu/MessengerActive",
-              $installerPath
-          ) -Wait -NoNewWindow
+          $timestampServers = @(
+              "http://timestamp.digicert.com",
+              "http://timestamp.globalsign.com/scripts/timstamp.dll"
+          )
+
+          $signed = $false
+          foreach ($server in $timestampServers) {
+              Write-Host "⏱ Attempting to sign using timestamp server: $server"
+              $args = @(
+                  "sign",
+                  "/f", $certPath,
+                  "/p", $password,
+                  "/fd", "SHA256",
+                  "/tr", $server,
+                  "/td", "SHA256",
+                  "/d", "MessengerActive Installer",
+                  "/du", "https://github.com/rupeshprabhu/MessengerActive",
+                  $installerPath
+              )
+
+              $proc = Start-Process -FilePath $signtool.FullName -ArgumentList $args -PassThru
+              if ($proc.WaitForExit(300000)) {
+                  if ($LASTEXITCODE -eq 0) {
+                      $signed = $true
+                      break
+                  } else {
+                      Write-Host "⚠️ Signing failed with $server, trying next server..."
+                  }
+              } else {
+                  $proc.Kill()
+                  Write-Host "⚠️ Signing timed out with $server, trying next server..."
+              }
+          }
+
+          if (-not $signed) {
+              Write-Warning "❌ All timestamp servers failed, signing installer without timestamp"
+              & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
+          }
 
           # Verify signature
-          Start-Process -FilePath $signtool.FullName -ArgumentList @("verify","/pa","/v",$installerPath) -Wait -NoNewWindow
+          & $signtool.FullName verify /pa /v $installerPath
+          if ($LASTEXITCODE -ne 0) { Write-Error "❌ Signature verification failed"; exit 1 }
           Write-Host "✅ Signed and verified successfully"
 
       - name: 📚 Archive source code
