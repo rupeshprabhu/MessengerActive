@@ -2,7 +2,7 @@
 ; MessengerActive Installer
 ; =============================
 #define MyAppName "MessengerActive"
-#define MyAppVersion "1.0.46"
+#define MyAppVersion "1.0.0"  ; Will be overwritten by build workflow
 #define MyAppPublisher "Absolute Gizmos by Rupesh Prabhu"
 #define MyAppExeName "MessengerActive.exe"
 
@@ -23,6 +23,7 @@ WizardStyle=modern
 UninstallDisplayIcon={app}\ma_icon.ico
 PrivilegesRequired=lowest
 
+
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
@@ -30,16 +31,11 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional icons:"
 
 [Files]
-; Include everything from dist\MessengerActive (including _internal)
 Source: "dist\MessengerActive.exe"; DestDir: "{app}"; Flags: ignoreversion
 
-
 [Icons]
-; Start Menu shortcut
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-; Desktop shortcut (optional checkbox)
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-; Launch app after install
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
