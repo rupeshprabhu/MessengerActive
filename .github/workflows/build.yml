@@ -67,9 +67,11 @@ jobs:
           git push origin HEAD:main
 
       - name: 🏗️ Build executable
+        shell: pwsh
         run: |
-          pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico ^
+          pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico `
             --add-data "version.txt;." MessengerActive.py
+
           if (-not (Test-Path "$env:BUILD_DIR/MessengerActive/MessengerActive.exe")) {
             Write-Error "Executable not found after PyInstaller!"
             exit 1
