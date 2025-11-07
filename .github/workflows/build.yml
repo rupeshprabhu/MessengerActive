@@ -68,7 +68,8 @@ jobs:
 
       - name: 🏗️ Build executable
         run: |
-          pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico MessengerActive.py
+          pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico ^
+            --add-data "version.txt;." MessengerActive.py
           if (-not (Test-Path "$env:BUILD_DIR/MessengerActive/MessengerActive.exe")) {
             Write-Error "Executable not found after PyInstaller!"
             exit 1
@@ -141,10 +142,10 @@ jobs:
 
           Write-Host "✅ Self-signed successfully for internal testing."
 
-      - name: 📚 Archive source code
-        run: |
-          git archive -o source_code.zip HEAD
-          git archive --format=tar.gz -o source_code.tar.gz HEAD
+      #- name: 📚 Archive source code
+      #  run: |
+      #    git archive -o source_code.zip HEAD
+      #    git archive --format=tar.gz -o source_code.tar.gz HEAD
 
       - name: ⬆️ Upload build artifacts
         uses: actions/upload-artifact@v4
