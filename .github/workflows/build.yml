@@ -18,7 +18,7 @@ env:
 
 jobs:
   build:
-    name: 🧪 Test & Build Windows App
+    name: 🧪 Test, Build & Package Windows App
     runs-on: windows-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -41,18 +41,21 @@ jobs:
       - name: 🧪 Run all tests
         run: pytest -v || exit 1
 
+      - name: 🧪 Run single-instance test
+        run: pytest -v tests/test_single_instance.py || exit 1
+
       - name: 🔢 Bump version
         id: version
         shell: pwsh
         run: |
-          $version = Get-Content version.txt -Raw
-          $version = $version.Trim()
+          $version = Get-Content version.txt
           $parts = $version.Split('.')
           $parts[-1] = [int]$parts[-1] + 1
           $newVersion = "$($parts -join '.')"
           Set-Content version.txt $newVersion
           echo "version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
-          Write-Host "✅ Bumped version to $newVersion"
+          echo "VERSION=$newVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
+          Write-Host "✅ Version bumped to $newVersion"
 
       - name: 💾 Commit version bump
         env:
@@ -64,38 +67,44 @@ jobs:
           git commit -m "Bump version to ${{ steps.version.outputs.version }}" || echo "No changes to commit"
           git push origin HEAD:main
 
-      - name: 🏗️ Build executable (onefile)
+      - name: 🏗️ Build executable (PyInstaller onefile)
         shell: pwsh
         run: |
           pyinstaller --noconfirm --onefile --windowed --icon ma_icon.ico MessengerActive.py
 
           $exePath = Join-Path $env:BUILD_DIR "MessengerActive.exe"
-          if (-not (Test-Path $exePath)) { Write-Error "Executable not found after PyInstaller!"; exit 1 }
+          if (-not (Test-Path $exePath)) {
+            Write-Error "Executable not found after PyInstaller!"
+            exit 1
+          }
 
           $outputDir = Join-Path $env:GITHUB_WORKSPACE $env:INSTALLER_DIR
           if (-not (Test-Path $outputDir)) { New-Item -Path $outputDir -ItemType Directory | Out-Null }
           Copy-Item $exePath -Destination $outputDir -Force
-          Write-Host "✅ Executable ready for Inno Setup"
+          Write-Host "✅ Executable copied to Output folder"
 
       - name: 📦 Create installer (Inno Setup)
         shell: pwsh
         run: |
-          # Update ISS file with new version
-          (Get-Content MessengerActive.iss) -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"$($env:VERSION)`"" | Set-Content MessengerActive.iss
+          # Update AppVersion in ISS file
+          $issPath = "MessengerActive.iss"
+          (Get-Content $issPath) -replace 'AppVersion=.*', "AppVersion=$env:VERSION" | Set-Content $issPath
 
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
+          # Compile installer
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" $issPath
 
+          # Rename installer to include version
           $installerPath = Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE $env:INSTALLER_DIR) -Filter "MessengerActive_Setup*.exe" | Select-Object -First 1
           if (-not $installerPath) { Write-Error "Installer not found after Inno Setup!"; exit 1 }
 
-          $newInstallerName = "${{ env.INSTALLER_BASE_NAME }}_$($env:VERSION).exe"
+          $newInstallerName = "MessengerActive_Setup_$($env:VERSION).exe"
           Rename-Item -Path $installerPath.FullName -NewName $newInstallerName -Force
           Write-Host "✅ Installer created: $newInstallerName"
 
-      - name: ⬆️ Upload build artifacts
+      - name: ⬆️ Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: messengeractive-artifacts
+          name: messengeractive-setup
           path: Output/MessengerActive_Setup_*.exe
 
   prerelease:
@@ -111,7 +120,7 @@ jobs:
       - name: 📦 Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: messengeractive-artifacts
+          name: messengeractive-setup
           path: release
 
       - name: 🏷️ Create Pre-release on GitHub
@@ -120,7 +129,6 @@ jobs:
           tag_name: "v${{ needs.build.outputs.version }}"
           name: "MessengerActive v${{ needs.build.outputs.version }}"
           prerelease: true
-          files: |
-            release/Output/MessengerActive_Setup_*.exe
+          files: release/Output/MessengerActive_Setup_*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
