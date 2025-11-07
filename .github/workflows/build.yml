@@ -69,13 +69,16 @@ jobs:
       - name: 🏗️ Build executable
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico `
+          pyinstaller --noconfirm --onefile --windowed --icon ma_icon.ico `
             --add-data "version.txt;." MessengerActive.py
 
-          if (-not (Test-Path "$env:BUILD_DIR/MessengerActive/MessengerActive.exe")) {
-            Write-Error "Executable not found after PyInstaller!"
+          $exePath = "$env:BUILD_DIR/MessengerActive.exe"
+          if (-not (Test-Path $exePath)) {
+            Write-Error "Executable not found after PyInstaller! Expected at $exePath"
             exit 1
           }
+
+          Write-Host "✅ PyInstaller onefile build succeeded: $exePath"
 
       - name: 📦 Create installer (Inno Setup)
         shell: pwsh
