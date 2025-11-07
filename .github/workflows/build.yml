@@ -89,7 +89,7 @@ jobs:
           }
 
           if (-not (Test-Path $installerPath)) {
-            Write-Error "Installer not found after Inno Setup!"
+            Write-Error "Installer not found after Inno Setup! Expected at $installerPath"
             exit 1
           }
 
@@ -100,19 +100,24 @@ jobs:
           Rename-Item -Path $installerPath -NewName $newInstallerName -Force
           Write-Host "✅ Renamed installer to: $newInstallerPath"
 
-      - name: 🔏 Self-sign the installer (fixed)
+      - name: 🔏 Self-sign the installer (temporary .pfx, fixed)
         shell: pwsh
         run: |
+          Write-Host "🔏 Creating temporary code signing certificate (.pfx) and signing installer..."
           $workspace = $env:GITHUB_WORKSPACE
           $installerDir = Join-Path $workspace "${{ env.INSTALLER_DIR }}"
           $installer = Get-ChildItem -Path $installerDir -Filter "${{ env.INSTALLER_BASE_NAME }}_*.exe" | Select-Object -First 1
-          if (-not $installer) { Write-Error "Installer not found"; exit 1 }
+
+          if (-not $installer) {
+            Write-Error "Installer not found for signing in $installerDir"
+            exit 1
+          }
 
           $certPath = Join-Path $env:RUNNER_TEMP "temp_signing_cert.pfx"
           $password = "password123"
           $securePassword = ConvertTo-SecureString -String $password -Force -AsPlainText
 
-          # Create exportable self-signed certificate
+          # Create self-signed certificate
           $cert = New-SelfSignedCertificate `
               -Subject "CN=Rupesh Prabhu (MessengerActive)" `
               -DnsName "MessengerActive.local" `
@@ -123,27 +128,38 @@ jobs:
               -KeyAlgorithm RSA `
               -HashAlgorithm SHA256
 
-          # Export with private key
+          # Export PFX with private key
           Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $securePassword -Force
           Write-Host "✅ Exported temporary PFX to $certPath"
 
-          # Locate signtool
+          # Verify private key
+          $importedCert = Get-PfxCertificate -FilePath $certPath
+          if (-not $importedCert.HasPrivateKey) { Write-Error "❌ PFX missing private key"; exit 1 }
+
+          # Locate signtool.exe
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -ErrorAction SilentlyContinue |
               Where-Object { $_.Name -eq "signtool.exe" -and $_.FullName -match "x64" } | Select-Object -First 1
           if (-not $signtool) {
             $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -ErrorAction SilentlyContinue |
                 Where-Object { $_.Name -eq "signtool.exe" } | Select-Object -First 1
           }
-          if (-not $signtool) { Write-Error "signtool.exe not found"; exit 1 }
+          if (-not $signtool) { Write-Error "❌ signtool.exe not found"; exit 1 }
 
           $installerPath = $installer.FullName
+
+          # Sign installer
           & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
               /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
 
-          if ($LASTEXITCODE -ne 0) { Write-Error "signtool failed"; exit 1 }
+          if ($LASTEXITCODE -ne 0 {
+            Write-Error "❌ signtool failed (exit code $LASTEXITCODE)"; exit 1
+          }
+
+          # Verify signature
           & $signtool.FullName verify /pa /v $installerPath
-          if ($LASTEXITCODE -ne 0) { Write-Error "Signature verification failed"; exit 1 }
-          Write-Host "✅ Signed and verified"
+          if ($LASTEXITCODE -ne 0) { Write-Error "❌ Signature verification failed"; exit 1 }
+
+          Write-Host "✅ Signed and verified successfully"
 
       - name: 📚 Archive source code
         run: |
