@@ -69,8 +69,7 @@ jobs:
       - name: 🏗️ Build executable
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico `
-            --add-data "version.txt;." MessengerActive.py
+          pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico --add-data "version.txt;." MessengerActive.py
           if (-not (Test-Path "$env:BUILD_DIR/MessengerActive/MessengerActive.exe")) {
             Write-Error "Executable not found after PyInstaller!"
             exit 1
@@ -105,6 +104,7 @@ jobs:
           $certPath = Join-Path $env:RUNNER_TEMP "temp_signing_cert.pfx"
           $password = "password123"
 
+          # Create temporary self-signed certificate
           $cert = New-SelfSignedCertificate `
               -Subject "CN=MessengerActive Developer Certificate" `
               -CertStoreLocation "Cert:\LocalMachine\My" `
@@ -122,20 +122,19 @@ jobs:
 
           Write-Host "✅ Temporary PFX created at: $certPath"
 
+          # Locate signtool.exe
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $signtool) { Write-Error "signtool.exe not found"; exit 1 }
 
-          $installerPath = $installer.FullName
+          # Sign installer
+          & $signtool.FullName sign /debug /f $certPath /p $password /fd SHA256 /d "MessengerActive Internal Build" /du "https://github.com/rupeshprabhu/MessengerActive" $installer.FullName
 
-          Write-Host "🔏 Signing installer with temporary developer certificate..."
-          & $signtool.FullName sign /debug /f $certPath /p $password /fd SHA256 /d "MessengerActive Internal Build" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
-
-          & $signtool.FullName verify /pa /v $installerPath
+          # Verify signature
+          & $signtool.FullName verify /pa /v $installer.FullName
           if ($LASTEXITCODE -ne 0) {
             Write-Error "❌ Signature verification failed!"
             exit 1
           }
-
           Write-Host "✅ Self-signed successfully for internal testing."
 
       - name: ⬆️ Upload build artifacts
@@ -168,12 +167,14 @@ jobs:
         run: |
           Write-Host "Downloaded files:"
           Get-ChildItem -Recurse release | ForEach-Object { Write-Host $_.FullName }
-          if (-not (Get-ChildItem "release" -Filter "MessengerActive_Setup_*.exe")) {
-            Write-Error "Installer not found"
-            exit 1
-          }
+
+          $installerPath = Get-ChildItem "release/Output" -Filter "MessengerActive_Setup_*.exe" | Select-Object -First 1
+          if (-not $installerPath) { Write-Error "Installer not found in release/Output"; exit 1 }
+
           if (-not (Test-Path "release/source_code.zip")) { Write-Error "Source zip not found"; exit 1 }
           if (-not (Test-Path "release/source_code.tar.gz")) { Write-Error "Source tar.gz not found"; exit 1 }
+
+          Write-Host "✅ All files verified successfully"
 
       - name: 🏷️ Create Pre-release on GitHub
         uses: softprops/action-gh-release@v2
@@ -181,9 +182,8 @@ jobs:
           tag_name: "v${{ needs.build.outputs.version }}"
           name: "MessengerActive v${{ needs.build.outputs.version }}"
           prerelease: true
-          body: "🚀 MessengerActive Internal Test Build\n\nIncludes installer for Windows.\n\nSource code archives are automatically attached by GitHub."
           files: |
-            release/MessengerActive_Setup_*.exe
+            release/Output/MessengerActive_Setup_*.exe
             release/source_code.zip
             release/source_code.tar.gz
         env:
