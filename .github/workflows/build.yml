@@ -17,8 +17,8 @@ env:
   INSTALLER_BASE_NAME: MessengerActive_Setup
 
 jobs:
-  build:
-    name: 🧪 Test & Build Windows App
+  build-and-release:
+    name: 🏗️ Build & Release
     runs-on: windows-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -40,9 +40,6 @@ jobs:
 
       - name: 🧪 Run all tests
         run: pytest -v || exit 1
-
-      - name: 🧪 Run single-instance test
-        run: pytest -v tests/test_single_instance.py || exit 1
 
       - name: 🔢 Bump version
         id: version
@@ -69,9 +66,7 @@ jobs:
       - name: 🏗️ Build executable
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico `
-            --add-data "version.txt;." MessengerActive.py
-          
+          pyinstaller --noconfirm --onedir --windowed --icon ma_icon.ico --add-data "version.txt;." MessengerActive.py
           if (-not (Test-Path "$env:BUILD_DIR/MessengerActive/MessengerActive.exe")) {
             Write-Error "Executable not found after PyInstaller!"
             exit 1
@@ -82,31 +77,26 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
           $workspace = $env:GITHUB_WORKSPACE
-          $installerPath = Join-Path $workspace "${{ env.INSTALLER_DIR }}\MessengerActive_Setup.exe"
-          if (-not (Test-Path $installerPath)) {
-            $found = Get-ChildItem -Path (Join-Path $workspace ${{ env.INSTALLER_DIR }}) -Filter "MessengerActive_Setup*.exe" | Select-Object -First 1
-            if ($found) { $installerPath = $found.FullName }
-          }
-          if (-not (Test-Path $installerPath)) { Write-Error "Installer not found after Inno Setup!"; exit 1 }
+          $installerPath = Get-ChildItem -Path (Join-Path $workspace $env:INSTALLER_DIR) -Filter "MessengerActive_Setup*.exe" | Select-Object -First 1
+          if (-not $installerPath) { Write-Error "Installer not found after Inno Setup!"; exit 1 }
           $version = "${{ steps.version.outputs.version }}"
-          $newInstallerName = "${{ env.INSTALLER_BASE_NAME }}_$version.exe"
-          Rename-Item -Path $installerPath -NewName $newInstallerName -Force
+          $newInstallerName = "${env:INSTALLER_BASE_NAME}_$version.exe"
+          Rename-Item -Path $installerPath.FullName -NewName $newInstallerName -Force
           Write-Host "✅ Renamed installer to: $newInstallerName"
 
-      - name: 🔏 Self-sign the installer (optional for internal testing)
+      - name: 🔏 Self-sign the installer (optional)
         if: env.SIGN_INTERNAL == 'true'
         shell: pwsh
         run: |
           Write-Host "🔏 Creating temporary code signing certificate (.pfx) and signing installer..."
           $workspace = $env:GITHUB_WORKSPACE
-          $installerDir = Join-Path $workspace "${{ env.INSTALLER_DIR }}"
-          $installer = Get-ChildItem -Path $installerDir -Filter "${{ env.INSTALLER_BASE_NAME }}_*.exe" | Select-Object -First 1
+          $installerDir = Join-Path $workspace $env:INSTALLER_DIR
+          $installer = Get-ChildItem -Path $installerDir -Filter "${env:INSTALLER_BASE_NAME}_*.exe" | Select-Object -First 1
           if (-not $installer) { Write-Error "Installer not found for signing"; exit 1 }
 
           $certPath = Join-Path $env:RUNNER_TEMP "temp_signing_cert.pfx"
           $password = "password123"
 
-          # Create temporary self-signed certificate (LocalMachine scope)
           $cert = New-SelfSignedCertificate `
               -Subject "CN=MessengerActive Developer Certificate" `
               -CertStoreLocation "Cert:\LocalMachine\My" `
@@ -116,7 +106,6 @@ jobs:
               -HashAlgorithm SHA256 `
               -NotAfter (Get-Date).AddDays(30)
 
-          # Export to PFX
           Export-PfxCertificate `
               -Cert $cert `
               -FilePath $certPath `
@@ -125,46 +114,24 @@ jobs:
 
           Write-Host "✅ Temporary PFX created at: $certPath"
 
-          # Locate signtool.exe
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $signtool) { Write-Error "signtool.exe not found"; exit 1 }
 
-          $installerPath = $installer.FullName
+          Write-Host "🔏 Signing installer..."
+          & $signtool.FullName sign /debug /f $certPath /p $password /fd SHA256 /d "MessengerActive Internal Build" /du "https://github.com/rupeshprabhu/MessengerActive" $installer.FullName
 
-          # Sign the installer
-          Write-Host "🔏 Signing installer with temporary developer certificate..."
-          & $signtool.FullName sign /debug /f $certPath /p $password /fd SHA256 /d "MessengerActive Internal Build" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
-
-          # Verify signature
-          & $signtool.FullName verify /pa /v $installerPath
+          & $signtool.FullName verify /pa /v $installer.FullName
           if ($LASTEXITCODE -ne 0) {
             Write-Error "❌ Signature verification failed!"
             exit 1
           }
-
           Write-Host "✅ Self-signed successfully for internal testing."
 
-  prerelease:
-    name: 🚀 Create Pre-Release
-    needs: build
-    runs-on: windows-latest
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-
-      - name: 📦 Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: messengeractive-artifacts
-          path: release
-
-      - name: 🔍 Verify downloaded files
+      - name: 🔍 Verify installer
         shell: pwsh
         run: |
-          Write-Host "Downloaded files:"
-          Get-ChildItem -Recurse release | ForEach-Object { Write-Host $_.FullName }
+          Write-Host "Files in release/Output:"
+          Get-ChildItem -Recurse release/Output | ForEach-Object { Write-Host $_.FullName }
 
           $installerPath = Get-ChildItem "release/Output" -Filter "MessengerActive_Setup_*.exe" | Select-Object -First 1
           if (-not $installerPath) {
@@ -174,13 +141,12 @@ jobs:
 
           Write-Host "✅ Installer verified successfully"
 
-      - name: 🏷️ Create Pre-release on GitHub
+      - name: 🏷️ Create GitHub prerelease
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ needs.build.outputs.version }}"
-          name: "MessengerActive v${{ needs.build.outputs.version }}"
+          tag_name: "v${{ steps.version.outputs.version }}"
+          name: "MessengerActive v${{ steps.version.outputs.version }}"
           prerelease: true
-          files: |
-            release/Output/MessengerActive_Setup_*.exe
+          files: release/Output/MessengerActive_Setup_*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
