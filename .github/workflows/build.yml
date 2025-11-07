@@ -90,13 +90,13 @@ jobs:
           Rename-Item -Path $installerPath -NewName $newInstallerName -Force
           Write-Host "✅ Renamed installer to: $newInstallerName"
 
-      - name: 🔏 Sign installer
+      - name: 🔏 Self-sign the installer (CI & Production)
         shell: pwsh
         run: |
-          Write-Host "🔏 Signing installer..."
+          Write-Host "🔏 Creating temporary code signing certificate (.pfx) and signing installer..."
           $workspace = $env:GITHUB_WORKSPACE
-          $installerDir = Join-Path $workspace "Output"
-          $installer = Get-ChildItem -Path $installerDir -Filter "MessengerActive_Setup_*.exe" | Select-Object -First 1
+          $installerDir = Join-Path $workspace "${{ env.INSTALLER_DIR }}"
+          $installer = Get-ChildItem -Path $installerDir -Filter "${{ env.INSTALLER_BASE_NAME }}_*.exe" | Select-Object -First 1
           if (-not $installer) { Write-Error "Installer not found for signing"; exit 1 }
 
           $certPath = Join-Path $env:RUNNER_TEMP "temp_signing_cert.pfx"
@@ -118,19 +118,15 @@ jobs:
           Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $securePassword -Force
           Write-Host "✅ Exported temporary PFX to $certPath"
 
+          $installerPath = $installer.FullName
+
           # Locate signtool.exe
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -ErrorAction SilentlyContinue |
               Where-Object { $_.Name -eq "signtool.exe" -and $_.FullName -match "x64" } | Select-Object -First 1
-          if (-not $signtool) {
-              $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -ErrorAction SilentlyContinue |
-                  Where-Object { $_.Name -eq "signtool.exe" } | Select-Object -First 1
-          }
           if (-not $signtool) { Write-Error "signtool.exe not found"; exit 1 }
 
-          $installerPath = $installer.FullName
-
-          # Sign using self-signed certificate
-          Write-Warning "⚠️ Using self-signed certificate, skipping timestamp servers"
+          # Sign using PFX directly (no import needed)
+          Write-Host "🔏 Signing installer with temporary PFX..."
           & $signtool.FullName sign /f $certPath /p $password /fd SHA256 /d "MessengerActive Installer" /du "https://github.com/rupeshprabhu/MessengerActive" $installerPath
 
           # Verify signature
