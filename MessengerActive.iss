@@ -19,10 +19,11 @@ WizardStyle=modern
 UninstallDisplayIcon={app}\ma_icon.ico
 PrivilegesRequired=lowest
 Uninstallable=yes
-AlwaysUninstallPreviousVersion=yes
-AppMutex=MessengerActive
 CloseApplications=yes
 RestartApplications=no
+AppMutex=MessengerActive
+AppModifyPath=
+AppUpdatesURL=https://github.com/rupeshprabhu/MessengerActive
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
