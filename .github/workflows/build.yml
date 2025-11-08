@@ -128,7 +128,7 @@ jobs:
         with:
           tag_name: "v${{ needs.build.outputs.version }}"
           name: "MessengerActive v${{ needs.build.outputs.version }}"
-          prerelease: false
+          prerelease: true
           files: release/MessengerActive_Setup_*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
