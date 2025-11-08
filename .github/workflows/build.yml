@@ -69,8 +69,17 @@ jobs:
       - name: 🏗️ Build executable (onefile)
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --onefile --windowed --icon ma_icon.ico MessengerActive.py --add-data "version.txt;."
+          $iconPath = "ma_icon.ico"
+          if (-not (Test-Path $iconPath)) {
+            Write-Error "❌ Icon file not found: $iconPath"
+            exit 1
+          }
 
+          pyinstaller --noconfirm --onefile --windowed `
+            --icon "$iconPath" `
+            --add-data "ma_icon.ico;." `
+            --add-data "version.txt;." `
+            MessengerActive.py
 
           $exePath = Join-Path $env:BUILD_DIR "MessengerActive.exe"
           if (-not (Test-Path $exePath)) {
@@ -82,18 +91,27 @@ jobs:
           $outputDir = Join-Path $env:GITHUB_WORKSPACE $env:INSTALLER_DIR
           if (-not (Test-Path $outputDir)) { New-Item -Path $outputDir -ItemType Directory | Out-Null }
           Copy-Item $exePath -Destination $outputDir -Force
+          Write-Host "✅ Built executable with icon and version resources"
 
       - name: 📝 Update ISS file with version
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          (Get-Content MessengerActive.iss) -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"$version`"" | Set-Content MessengerActive.iss
+          $issFile = "MessengerActive.iss"
+
+          (Get-Content $issFile) |
+          ForEach-Object {
+              $_ -replace 'AppVersion=.*', "AppVersion=$version"
+          } | Set-Content $issFile
+
+          Write-Host "✅ Updated ISS version to $version"
 
       - name: 📦 Create installer (Inno Setup)
         shell: pwsh
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "MessengerActive.iss"
 
+          $version = "${{ steps.version.outputs.version }}"
           $installerPath = Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE $env:INSTALLER_DIR) -Filter "MessengerActive_Setup*.exe" | Select-Object -First 1
           if (-not $installerPath) { Write-Error "Installer not found after Inno Setup!"; exit 1 }
 

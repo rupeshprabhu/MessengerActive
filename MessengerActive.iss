@@ -18,6 +18,11 @@ SetupIconFile=ma_icon.ico
 WizardStyle=modern
 UninstallDisplayIcon={app}\ma_icon.ico
 PrivilegesRequired=lowest
+Uninstallable=yes
+AlwaysUninstallPreviousVersion=yes
+AppMutex=MessengerActive
+CloseApplications=yes
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
